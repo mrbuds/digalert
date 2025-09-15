@@ -1,5 +1,7 @@
 *.png
+!DIG.png
+!egg.png
 *.log
+*.json
 __pycache__
 .DS_Store
-*.json
