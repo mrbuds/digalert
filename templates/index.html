@@ -41,6 +41,7 @@
         .status-card.warning { border-left-color: #ffc107; }
         .status-card.danger { border-left-color: #dc3545; }
         .status-card.info { border-left-color: #17a2b8; }
+        .status-card.secondary { border-left-color: #6c757d; }
         
         .metric-value {
             font-size: 2rem;
@@ -85,6 +86,96 @@
             100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
         }
         
+        /* NOUVEAU: Styles pour les contrôles de pause */
+        .pause-controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            backdrop-filter: blur(10px);
+        }
+        
+        .pause-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        
+        .pause-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+        }
+        
+        .pause-btn.active {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+        }
+        
+        .pause-btn.inactive {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+        }
+        
+        .pause-status {
+            margin-top: 10px;
+            text-align: center;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .pause-status.paused {
+            color: #dc3545;
+        }
+        
+        .pause-status.running {
+            color: #28a745;
+        }
+        
+        .system-paused-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(220, 53, 69, 0.1);
+            z-index: 100;
+            pointer-events: none;
+            display: none;
+        }
+        
+        .paused-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(220, 53, 69, 0.9);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 15px;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 101;
+            display: none;
+            animation: pausePulse 2s infinite;
+        }
+        
+        @keyframes pausePulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+        
         .header-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -98,6 +189,10 @@
             padding: 20px;
             border-radius: 15px;
             text-align: center;
+        }
+        
+        .stat-box.paused {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
         }
         
         .update-indicator {
@@ -256,6 +351,21 @@
     </style>
 </head>
 <body>
+    <!-- NOUVEAU: Contrôles de pause -->
+    <div class="pause-controls">
+        <button id="pauseBtn" class="pause-btn inactive" onclick="togglePause()" title="Mettre en pause / Reprendre">
+            <i class="fas fa-play"></i>
+        </button>
+        <div id="pauseStatus" class="pause-status running">Actif</div>
+    </div>
+
+    <!-- NOUVEAU: Overlay pour l'état de pause -->
+    <div id="systemPausedOverlay" class="system-paused-overlay">
+        <div class="paused-indicator">
+            <i class="fas fa-pause"></i> SYSTÈME EN PAUSE
+        </div>
+    </div>
+
     <div class="update-indicator">
         <div id="connection-status" class="online-indicator">
             <i class="fas fa-wifi"></i> En ligne
@@ -272,19 +382,19 @@
             
             <!-- Statistiques globales -->
             <div class="header-stats">
-                <div class="stat-box">
+                <div class="stat-box" id="uptimeBox">
                     <div class="metric-value" id="uptime">00:00:00</div>
                     <div class="metric-label">Temps de fonctionnement</div>
                 </div>
-                <div class="stat-box">
+                <div class="stat-box" id="cyclesBox">
                     <div class="metric-value" id="total-cycles">0</div>
                     <div class="metric-label">Cycles exécutés</div>
                 </div>
-                <div class="stat-box">
+                <div class="stat-box" id="reconnectionsBox">
                     <div class="metric-value" id="obs-reconnections">0</div>
                     <div class="metric-label">Reconnexions OBS</div>
                 </div>
-                <div class="stat-box">
+                <div class="stat-box" id="alertsBox">
                     <div class="metric-value" id="total-alerts">0</div>
                     <div class="metric-label">Alertes détectées</div>
                 </div>
@@ -363,6 +473,71 @@
         let lastUpdate = Date.now();
         let currentScreenshotUrl = '';
         let lastAlertHistoryCount = 0;
+        let systemPaused = false; // NOUVEAU: État de pause local
+        
+        // NOUVEAU: Fonction pour basculer pause/reprise
+        function togglePause() {
+            fetch('/api/toggle_pause', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updatePauseUI(data.paused);
+                        showNotification('Contrôle Système', data.message);
+                    } else {
+                        console.error('Erreur toggle pause:', data.error);
+                        showNotification('Erreur', 'Impossible de changer l\'état de pause');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erreur toggle pause:', error);
+                    showNotification('Erreur', 'Problème de communication avec le serveur');
+                });
+        }
+        
+        // NOUVEAU: Met à jour l'interface selon l'état de pause
+        function updatePauseUI(paused) {
+            systemPaused = paused;
+            const pauseBtn = document.getElementById('pauseBtn');
+            const pauseStatus = document.getElementById('pauseStatus');
+            const overlay = document.getElementById('systemPausedOverlay');
+            const pausedIndicator = overlay.querySelector('.paused-indicator');
+            
+            // Mise à jour du bouton
+            if (paused) {
+                pauseBtn.className = 'pause-btn active';
+                pauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                pauseBtn.title = 'Système en pause - Cliquer pour reprendre';
+                
+                pauseStatus.textContent = 'En Pause';
+                pauseStatus.className = 'pause-status paused';
+                
+                // Afficher l'overlay
+                overlay.style.display = 'block';
+                pausedIndicator.style.display = 'block';
+                
+                // Griser les statistiques
+                document.querySelectorAll('.stat-box').forEach(box => {
+                    box.classList.add('paused');
+                });
+                
+            } else {
+                pauseBtn.className = 'pause-btn inactive';
+                pauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+                pauseBtn.title = 'Système actif - Cliquer pour mettre en pause';
+                
+                pauseStatus.textContent = 'Actif';
+                pauseStatus.className = 'pause-status running';
+                
+                // Cacher l'overlay
+                overlay.style.display = 'none';
+                pausedIndicator.style.display = 'none';
+                
+                // Retirer le grisage
+                document.querySelectorAll('.stat-box').forEach(box => {
+                    box.classList.remove('paused');
+                });
+            }
+        }
         
         function updateData() {
             fetch('/api/status')
@@ -371,6 +546,11 @@
                     updateGlobalStats(data.global_stats, data.uptime);
                     updateSourcesStatus(data.windows_state);
                     updateAlertsHistory(data.alerts_history);
+                    
+                    // NOUVEAU: Mettre à jour l'état de pause
+                    if (data.system_paused !== undefined && data.system_paused !== systemPaused) {
+                        updatePauseUI(data.system_paused);
+                    }
                     
                     lastUpdate = Date.now();
                     updateConnectionStatus(true);
@@ -616,6 +796,7 @@
                 case 'ALERTE': return '<i class="fas fa-exclamation-circle text-warning"></i>';
                 case 'ERREUR': return '<i class="fas fa-times-circle text-danger"></i>';
                 case 'Instable': return '<i class="fas fa-question-circle text-info"></i>';
+                case 'PAUSE': return '<i class="fas fa-pause-circle text-secondary"></i>';
                 default: return '<i class="fas fa-circle text-secondary"></i>';
             }
         }
@@ -679,6 +860,19 @@
             }
         }
         
+        // NOUVEAU: Raccourci clavier pour pause (Espace ou P)
+        document.addEventListener('keydown', function(event) {
+            // Éviter d'intercepter les touches dans les champs de saisie
+            if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+                return;
+            }
+            
+            if (event.code === 'Space' || event.code === 'KeyP') {
+                event.preventDefault();
+                togglePause();
+            }
+        });
+        
         // Démarrage
         updateData();
         setInterval(updateData, 2000);
@@ -694,6 +888,11 @@
         if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
         }
+        
+        // Afficher les instructions de raccourci au démarrage
+        setTimeout(() => {
+            showNotification('Interface prête', 'Utilisez ESPACE ou P pour mettre en pause/reprendre');
+        }, 2000);
     </script>
 </body>
 </html>

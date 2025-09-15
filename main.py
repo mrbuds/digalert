@@ -3,7 +3,7 @@ from obswebsocket import obsws
 from win10toast import ToastNotifier
 import time
 import threading
-import numpy as np  # AJOUTÉ : import manquant
+import numpy as np
 from queue import Queue
 from collections import defaultdict
 import json
@@ -11,8 +11,15 @@ import json
 from config import ALERTS, COOLDOWN_PERIOD, CHECK_INTERVAL, OBS_WS_HOST, OBS_WS_PASSWORD, OBS_WS_PORT, WINDOW_RETRY_INTERVAL, SOURCE_WINDOWS
 from capture import capture_window
 from detection import check_for_alert, cleanup_template_cache_if_needed
-from webapp import init_webapp, start_webapp, update_webapp_data, add_webapp_alert, stop_webapp, update_webapp_screenshot
+from webapp import (init_webapp, start_webapp, update_webapp_data, add_webapp_alert, 
+                   stop_webapp, update_webapp_screenshot, register_pause_callback, 
+                   is_webapp_paused, set_webapp_pause_state)
 from utils import log_error, log_info, log_debug
+
+
+# Variables globales pour la gestion de pause
+SYSTEM_PAUSED = False
+PAUSE_LOCK = threading.Lock()
 
 
 def is_black_screen(screenshot, threshold=10):
@@ -21,15 +28,58 @@ def is_black_screen(screenshot, threshold=10):
         return False
     
     try:
-        # Vérifier la moyenne ET l'écart-type
         mean_val = np.mean(screenshot)
         std_val = np.std(screenshot)
-        
-        # Écran noir si très sombre ET peu de variation
         return mean_val < threshold and std_val < 5
     except Exception as e:
         log_error(f"Erreur détection écran noir: {e}")
         return False
+
+
+def pause_system():
+    """Met le système en pause"""
+    global SYSTEM_PAUSED
+    with PAUSE_LOCK:
+        SYSTEM_PAUSED = True
+        set_webapp_pause_state(True)
+        log_info("🛑 Système mis en PAUSE - Détections arrêtées")
+
+
+def resume_system():
+    """Reprend le système"""
+    global SYSTEM_PAUSED
+    with PAUSE_LOCK:
+        SYSTEM_PAUSED = False
+        set_webapp_pause_state(False)
+        log_info("▶️ Système REPRIS - Détections actives")
+
+
+def is_system_paused():
+    """Vérifie si le système est en pause (local ou webapp)"""
+    global SYSTEM_PAUSED
+    with PAUSE_LOCK:
+        webapp_paused = is_webapp_paused()
+        return SYSTEM_PAUSED or webapp_paused
+
+
+def toggle_pause():
+    """Bascule entre pause et reprise"""
+    if is_system_paused():
+        resume_system()
+        return False
+    else:
+        pause_system()
+        return True
+
+
+def webapp_pause_callback(paused):
+    """Callback appelé quand l'état de pause change dans l'interface web"""
+    global SYSTEM_PAUSED
+    with PAUSE_LOCK:
+        SYSTEM_PAUSED = paused
+        status = "pause" if paused else "repris"
+        icon = "🛑" if paused else "▶️"
+        log_info(f"{icon} Système {status} via interface web")
 
 
 class NotificationQueue:
@@ -50,7 +100,7 @@ class NotificationQueue:
                         notification['message'],
                         duration=notification.get('duration', 10)
                     )
-                    time.sleep(2)  # Délai entre notifications
+                    time.sleep(2)
                 else:
                     time.sleep(0.1)
             except Exception as e:
@@ -132,7 +182,7 @@ def main():
             "error_count": 0,
             "performance_ms": 0,
             "notification_cooldown": win.get("notification_cooldown", COOLDOWN_PERIOD),
-            "last_black_screen_notification": 0  # Nouveau : suivi des notifications d'écran noir
+            "last_black_screen_notification": 0
         }
 
     # Statistiques globales
@@ -140,12 +190,20 @@ def main():
         "start_time": time.time(),
         "total_cycles": 0,
         "obs_reconnections": 0,
-        "last_status_save": 0
+        "last_status_save": 0,
+        "pause_count": 0,
+        "total_paused_time": 0
     }
+
+    pause_start_time = None
 
     try:
         # Initialisation de l'interface web
         webapp = init_webapp(port=5000, debug=False)
+        
+        # Enregistrer le callback pour synchroniser les états de pause
+        register_pause_callback(webapp_pause_callback)
+        
         start_webapp()
         log_info("🌐 Interface web disponible sur http://localhost:5000")
         
@@ -155,6 +213,9 @@ def main():
             return
 
         log_info("=== Démarrage du système de détection d'alertes ===")
+        log_info("💡 Contrôles disponibles:")
+        log_info("   - Interface web: bouton pause/reprise")
+        log_info("   - Raccourci web: ESPACE ou P")
         
         while True:
             try:
@@ -162,7 +223,26 @@ def main():
                 current_time = time.time()
                 global_stats["total_cycles"] += 1
 
-                # Nettoyage périodique (toutes les 100 itérations)
+                # Gestion de la pause
+                if is_system_paused():
+                    if pause_start_time is None:
+                        pause_start_time = current_time
+                        global_stats["pause_count"] += 1
+                        log_info("⏸️ Système en pause - En attente de reprise...")
+                    
+                    # Pendant la pause, maintenir la connexion et l'interface web
+                    update_webapp_data(windows_state, global_stats)
+                    time.sleep(1)
+                    continue
+                else:
+                    # Si on sort de pause, calculer le temps de pause
+                    if pause_start_time is not None:
+                        pause_duration = current_time - pause_start_time
+                        global_stats["total_paused_time"] += pause_duration
+                        log_info(f"▶️ Reprise après {pause_duration:.1f}s de pause")
+                        pause_start_time = None
+
+                # Nettoyage périodique
                 if global_stats["total_cycles"] % 100 == 0:
                     cleanup_template_cache_if_needed()
 
@@ -189,28 +269,25 @@ def main():
                         capture_time = (time.time() - capture_start) * 1000
                         state["performance_ms"] = capture_time
 
-                        # CORRECTION : Vérification None AVANT utilisation
                         if screenshot is None:
                             state["consecutive_failures"] += 1
                             state["last_error"] = "Capture échouée"
                             state["error_count"] += 1
                             log_debug(f"Capture échouée pour {source_name} (échecs consécutifs: {state['consecutive_failures']})")
                             
-                            # Si trop d'échecs consécutifs, augmenter l'intervalle
                             if state["consecutive_failures"] >= 5:
                                 log_error(f"Trop d'échecs pour {source_name}, pause longue")
                                 time.sleep(WINDOW_RETRY_INTERVAL)
-                            continue  # IMPORTANT : passer à la source suivante
+                            continue
 
-                        # Toujours sauvegarder le dernier screenshot (même sans alerte)
+                        # Toujours sauvegarder le dernier screenshot
                         update_webapp_screenshot(source_name, screenshot, False, None)
 
-                        # AMÉLIORATION : Vérification d'écran noir plus robuste
+                        # Vérification d'écran noir
                         if is_black_screen(screenshot):
                             current_black_screen_time = current_time
                             last_black_screen_notification = state.get("last_black_screen_notification", 0)
                             
-                            # Notification d'écran noir (cooldown de 60 secondes)
                             if current_black_screen_time - last_black_screen_notification > 60:
                                 black_screen_title = f"⚫ Écran Noir - {source_name}"
                                 black_screen_message = f"Écran noir détecté sur {source_name}. Vérifiez la capture OBS."
@@ -219,18 +296,16 @@ def main():
                                     state["last_black_screen_notification"] = current_black_screen_time
                                     log_info(f"📢 Notification écran noir envoyée pour {source_name}")
                                 
-                            # Marquer comme problématique mais continuer la détection
                             state["consecutive_failures"] += 1
                             state["last_error"] = f"Écran noir détecté"
                         else:
-                            # Écran normal, reset des échecs liés à l'écran noir
                             last_error = state.get("last_error")
                             if last_error and "écran noir" in last_error.lower():
                                 state["consecutive_failures"] = 0
                                 state["last_error"] = None
 
                         state["successful_captures"] += 1
-                        state["last_error"] = None  # Reset de l'erreur si capture réussie
+                        state["last_error"] = None
 
                         # Détection d'alertes avec zone de détection
                         alert_detected = False
@@ -238,14 +313,11 @@ def main():
                         max_confidence = 0.0
                         detection_area = None
 
-                        # Vérifier chaque alerte configurée
                         for alert in ALERTS:
-                            # Vérifier que l'alerte est activée
                             if not alert.get('enabled', True):
                                 continue
                                 
                             try:
-                                # AMÉLIORATION : Récupérer aussi la zone de détection
                                 result = check_for_alert(screenshot, alert, return_confidence=True, return_area=True)
                                 
                                 if isinstance(result, tuple) and len(result) == 2:
@@ -258,7 +330,6 @@ def main():
                                     max_confidence = confidence
                                     detection_area = area
                                     
-                                # Utiliser le threshold spécifique de l'alerte
                                 if confidence >= alert['threshold']:
                                     alert_detected = True
                                     current_alert = alert
@@ -278,15 +349,12 @@ def main():
                         else:
                             state["consecutive_detections"] = 0
 
-                        # Logique de notification améliorée
+                        # Logique de notification
                         should_notify = False
                         if alert_detected:
                             time_since_last = current_time - state["last_notification_time"]
                             cooldown = state["notification_cooldown"]
                             
-                            # Notification si:
-                            # 1. Première détection (transition False -> True)
-                            # 2. OU cooldown écoulé et détection stable (3+ consécutives)
                             if (not state["last_alert_state"]) or \
                                (time_since_last > cooldown and state["consecutive_detections"] >= 3):
                                 should_notify = True
@@ -300,7 +368,6 @@ def main():
                                 state["notifications_sent"] += 1
                                 log_info(f"Notification envoyée pour {source_name}: {current_alert['name']}")
                                 
-                                # CORRECTION : Ajouter la zone de détection à l'interface web
                                 add_webapp_alert(source_name, current_alert['name'], max_confidence, 
                                                 screenshot, detection_area)
                             else:
@@ -314,24 +381,29 @@ def main():
                         state["last_error"] = str(e)
                         log_error(f"Erreur traitement {source_name}: {e}")
 
-                # Affichage du tableau de bord (remplacé par interface web)
+                # Mise à jour interface web
                 update_webapp_data(windows_state, global_stats)
                 
-                # Affichage console simplifié (optionnel)
-                if global_stats["total_cycles"] % 10 == 0:  # Toutes les 10 itérations
+                # Affichage console simplifié
+                if global_stats["total_cycles"] % 10 == 0:
                     cycle_duration = time.time() - cycle_start
                     active_sources = sum(1 for state in windows_state.values() 
                                        if state.get('consecutive_failures', 0) < 5)
                     total_detections = sum(state.get('total_detections', 0) 
                                          for state in windows_state.values())
                     
+                    pause_status = " [PAUSE]" if is_system_paused() else ""
+                    pause_info = ""
+                    if global_stats["pause_count"] > 0:
+                        pause_info = f" (Pauses: {global_stats['pause_count']}, Temps pause: {global_stats['total_paused_time']:.1f}s)"
+                    
                     log_info(f"📊 Cycle {global_stats['total_cycles']}: "
                            f"{active_sources}/{len(windows_state)} sources actives, "
                            f"{total_detections} détections, "
-                           f"{cycle_duration:.2f}s")
+                           f"{cycle_duration:.2f}s{pause_status}{pause_info}")
                 
-                # Sauvegarde périodique des statistiques
-                if current_time - global_stats["last_status_save"] > 300:  # 5 minutes
+                # Sauvegarde périodique
+                if current_time - global_stats["last_status_save"] > 300:
                     save_statistics(windows_state, global_stats)
                     global_stats["last_status_save"] = current_time
 
@@ -353,12 +425,29 @@ def main():
     finally:
         # Nettoyage
         log_info("🛑 Arrêt du système en cours...")
+        
+        # Calculer le temps total de pause si on est encore en pause
+        if pause_start_time is not None:
+            final_pause_duration = time.time() - pause_start_time
+            global_stats["total_paused_time"] += final_pause_duration
+        
         notification_queue.stop()
         obs_manager.disconnect()
         stop_webapp()
         save_statistics(windows_state, global_stats)
         
+        # Affichage des statistiques finales
+        total_uptime = time.time() - global_stats["start_time"]
+        active_time = total_uptime - global_stats["total_paused_time"]
+        pause_percentage = (global_stats["total_paused_time"] / total_uptime) * 100 if total_uptime > 0 else 0
+        
+        log_info("=== Statistiques finales ===")
+        log_info(f"Temps total: {total_uptime:.1f}s")
+        log_info(f"Temps actif: {active_time:.1f}s")
+        log_info(f"Temps en pause: {global_stats['total_paused_time']:.1f}s ({pause_percentage:.1f}%)")
+        log_info(f"Nombre de pauses: {global_stats['pause_count']}")
         log_info("=== Arrêt du système ===")
+        
         print("\n🎮 Last War Alerts arrêté")
         print("Interface web fermée")
         input("Appuyez sur Entrée pour quitter...")
@@ -370,7 +459,8 @@ def save_statistics(windows_state, global_stats):
         stats_data = {
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "global_stats": {},
-            "windows_state": {}
+            "windows_state": {},
+            "system_paused": is_system_paused()
         }
         
         # Nettoyage des stats globales
@@ -384,13 +474,11 @@ def save_statistics(windows_state, global_stats):
         for source, state in windows_state.items():
             clean_state = {}
             for key, value in state.items():
-                # Filtrer les types non-sérialisables
                 if isinstance(value, (int, float, str, type(None))):
                     clean_state[key] = value
                 elif isinstance(value, bool):
                     clean_state[key] = value
                 elif isinstance(value, (list, tuple)):
-                    # Nettoyer les listes
                     clean_list = []
                     for item in value:
                         if isinstance(item, (int, float, str, bool, type(None))):
@@ -399,7 +487,6 @@ def save_statistics(windows_state, global_stats):
                             clean_list.append(str(item))
                     clean_state[key] = clean_list
                 else:
-                    # Convertir en string pour les autres types
                     clean_state[key] = str(value)
             
             stats_data["windows_state"][source] = clean_state
@@ -410,7 +497,6 @@ def save_statistics(windows_state, global_stats):
         log_debug("Statistiques sauvegardées")
     except Exception as e:
         log_error(f"Erreur sauvegarde statistiques: {e}")
-        # Sauvegarde de debug pour identifier le problème
         try:
             debug_data = {
                 "error": str(e),

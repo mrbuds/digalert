@@ -19,15 +19,16 @@ class WebAppManager:
         self.windows_state = {}
         self.global_stats = {}
         self.alerts_history = []
-        self.alerts_with_screenshots = []  # NOUVEAU: Historique avec screenshots
+        self.alerts_with_screenshots = []
         self.server_thread = None
         self.running = False
-        self.latest_screenshots = {}  # Screenshots sans alerte
-        self.latest_detections = {}   # Screenshots avec détection
+        self.latest_screenshots = {}
+        self.latest_detections = {}
+        # NOUVEAU: Variables pour la gestion de pause
+        self.system_paused = False
+        self.pause_callbacks = []  # Callbacks pour notifier les changements d'état
         
-        # Créer les dossiers nécessaires
         self._ensure_directories()
-        
         self.setup_routes()
         
     def _ensure_directories(self):
@@ -35,7 +36,7 @@ class WebAppManager:
         required_dirs = [
             'static',
             'static/screenshots',
-            'static/alerts',  # NOUVEAU: Dossier spécifique aux alertes
+            'static/alerts',
             'templates'
         ]
         
@@ -45,6 +46,18 @@ class WebAppManager:
                 log_debug(f"Dossier créé/vérifié: {directory}")
             except Exception as e:
                 log_error(f"Erreur création dossier {directory}: {e}")
+    
+    def register_pause_callback(self, callback):
+        """Enregistre un callback pour les changements d'état de pause"""
+        self.pause_callbacks.append(callback)
+    
+    def _notify_pause_change(self, paused):
+        """Notifie tous les callbacks du changement d'état"""
+        for callback in self.pause_callbacks:
+            try:
+                callback(paused)
+            except Exception as e:
+                log_error(f"Erreur callback pause: {e}")
         
     def setup_routes(self):
         """Configuration des routes Flask"""
@@ -60,8 +73,9 @@ class WebAppManager:
                 'timestamp': datetime.now().isoformat(),
                 'windows_state': self.format_windows_state(),
                 'global_stats': self.format_global_stats(),
-                'alerts_history': self.alerts_history[-20:],  # 20 dernières alertes simples
-                'uptime': self.calculate_uptime()
+                'alerts_history': self.alerts_history[-20:],
+                'uptime': self.calculate_uptime(),
+                'system_paused': self.system_paused  # NOUVEAU: État de pause
             })
         
         @self.app.route('/api/alerts/history')
@@ -69,7 +83,7 @@ class WebAppManager:
             """API pour l'historique complet des alertes avec screenshots"""
             return jsonify({
                 'alerts': self.alerts_history[-50:],
-                'alerts_with_screenshots': self.alerts_with_screenshots[-10:],  # 10 dernières avec screenshots
+                'alerts_with_screenshots': self.alerts_with_screenshots[-10:],
                 'latest_detections': self.latest_detections
             })
         
@@ -101,6 +115,59 @@ class WebAppManager:
                     return send_file(detection_path, mimetype='image/png')
             
             return jsonify({'error': 'Screenshot de détection non trouvé'}), 404
+        
+        # NOUVEAU: Routes pour contrôler la pause
+        @self.app.route('/api/pause', methods=['POST'])
+        def api_pause():
+            """API pour mettre en pause"""
+            try:
+                self.system_paused = True
+                self._notify_pause_change(True)
+                log_info("🛑 Système mis en pause via interface web")
+                return jsonify({'success': True, 'paused': True, 'message': 'Système en pause'})
+            except Exception as e:
+                log_error(f"Erreur mise en pause: {e}")
+                return jsonify({'success': False, 'error': str(e)})
+        
+        @self.app.route('/api/resume', methods=['POST'])
+        def api_resume():
+            """API pour reprendre"""
+            try:
+                self.system_paused = False
+                self._notify_pause_change(False)
+                log_info("▶️ Système repris via interface web")
+                return jsonify({'success': True, 'paused': False, 'message': 'Système repris'})
+            except Exception as e:
+                log_error(f"Erreur reprise: {e}")
+                return jsonify({'success': False, 'error': str(e)})
+        
+        @self.app.route('/api/toggle_pause', methods=['POST'])
+        def api_toggle_pause():
+            """API pour basculer pause/reprise"""
+            try:
+                self.system_paused = not self.system_paused
+                self._notify_pause_change(self.system_paused)
+                
+                status = "pause" if self.system_paused else "repris"
+                icon = "🛑" if self.system_paused else "▶️"
+                
+                log_info(f"{icon} Système {status} via interface web")
+                return jsonify({
+                    'success': True, 
+                    'paused': self.system_paused,
+                    'message': f'Système {status}'
+                })
+            except Exception as e:
+                log_error(f"Erreur bascule pause: {e}")
+                return jsonify({'success': False, 'error': str(e)})
+        
+        @self.app.route('/api/pause_status')
+        def api_pause_status():
+            """API pour récupérer l'état de pause"""
+            return jsonify({
+                'paused': self.system_paused,
+                'timestamp': datetime.now().isoformat()
+            })
         
         @self.app.route('/api/reset_stats', methods=['POST'])
         def api_reset_stats():
@@ -167,7 +234,9 @@ class WebAppManager:
         consecutive_failures = state.get('consecutive_failures', 0)
         alert_state = state.get('last_alert_state', False)
         
-        if consecutive_failures >= 5:
+        if self.system_paused:
+            return 'PAUSE'
+        elif consecutive_failures >= 5:
             return 'ERREUR'
         elif alert_state:
             return 'ALERTE'
@@ -181,7 +250,9 @@ class WebAppManager:
         consecutive_failures = state.get('consecutive_failures', 0)
         alert_state = state.get('last_alert_state', False)
         
-        if consecutive_failures >= 5:
+        if self.system_paused:
+            return 'secondary'
+        elif consecutive_failures >= 5:
             return 'danger'
         elif alert_state:
             return 'warning'
@@ -215,7 +286,9 @@ class WebAppManager:
             'start_time': self.global_stats.get('start_time'),
             'total_cycles': self.global_stats.get('total_cycles', 0),
             'obs_reconnections': self.global_stats.get('obs_reconnections', 0),
-            'uptime_seconds': time.time() - self.global_stats.get('start_time', time.time())
+            'uptime_seconds': time.time() - self.global_stats.get('start_time', time.time()),
+            'pause_count': self.global_stats.get('pause_count', 0),
+            'total_paused_time': self.global_stats.get('total_paused_time', 0)
         }
     
     def calculate_uptime(self):
@@ -250,7 +323,7 @@ class WebAppManager:
         
         self.alerts_history.append(alert_entry)
         
-        # NOUVEAU: Alerte avec screenshot pour l'historique détaillé
+        # Alerte avec screenshot pour l'historique détaillé
         if screenshot is not None:
             screenshot_filename = self._save_alert_screenshot(source_name, screenshot, alert_name, detection_area, timestamp)
             
@@ -264,14 +337,13 @@ class WebAppManager:
                     'detection_area': detection_area,
                     'screenshot_filename': screenshot_filename,
                     'screenshot_url': f"/api/alert_screenshot/{screenshot_filename}",
-                    'relative_time': '0s'  # Sera mis à jour côté client
+                    'relative_time': '0s'
                 }
                 
                 self.alerts_with_screenshots.append(alert_with_screenshot)
                 
                 # Garder seulement les 10 dernières alertes avec screenshots
                 if len(self.alerts_with_screenshots) > 10:
-                    # Supprimer les anciens fichiers
                     old_alert = self.alerts_with_screenshots[0]
                     old_filepath = f"static/alerts/{old_alert['screenshot_filename']}"
                     try:
@@ -293,7 +365,7 @@ class WebAppManager:
         try:
             clean_source = source_name.replace(' ', '_').replace('!', '')
             clean_alert = alert_name.replace(' ', '_').replace('!', '')
-            timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S_%f")[:-3]  # Inclure millisecondes
+            timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S_%f")[:-3]
             
             # Créer une copie du screenshot avec la zone marquée
             marked_screenshot = screenshot.copy()
@@ -344,8 +416,7 @@ class WebAppManager:
                 
             timestamp = datetime.now()
             clean_source = source_name.replace(' ', '_').replace('!', '')
-            timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
-            filename = f"{clean_source}_latest.png"  # MODIFIÉ: nom de fichier constant
+            filename = f"{clean_source}_latest.png"
             
             # Sauvegarder l'image
             filepath = f"static/screenshots/{filename}"
@@ -472,3 +543,23 @@ def stop_webapp():
     global webapp_manager
     if webapp_manager:
         webapp_manager.stop()
+
+# NOUVELLES fonctions pour la gestion de pause
+def register_pause_callback(callback):
+    """Enregistre un callback pour les changements d'état de pause"""
+    global webapp_manager
+    if webapp_manager:
+        webapp_manager.register_pause_callback(callback)
+
+def is_webapp_paused():
+    """Vérifie si le système est en pause depuis l'interface web"""
+    global webapp_manager
+    if webapp_manager:
+        return webapp_manager.system_paused
+    return False
+
+def set_webapp_pause_state(paused):
+    """Définit l'état de pause depuis l'extérieur"""
+    global webapp_manager
+    if webapp_manager:
+        webapp_manager.system_paused = paused
