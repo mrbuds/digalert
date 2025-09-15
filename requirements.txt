@@ -1,0 +1,32 @@
+# Dépendances principales
+obs-websocket-py>=1.7.0
+win10toast>=0.9
+opencv-python>=4.8.0
+numpy>=1.24.0
+pytesseract>=0.3.10
+pygetwindow>=0.0.9
+pywin32>=306
+
+# Interface web
+flask>=2.3.0
+flask-cors>=4.0.0
+
+# Dépendances pour les statistiques et performances
+psutil>=5.9.0
+
+# Dépendances optionnelles pour les améliorations
+Pillow>=9.5.0
+requests>=2.31.0
+
+# Dépendances de développement (optionnel)
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.7.0
+flake8>=6.0.0
+
+# Note d'installation:
+# 1. Installer Tesseract OCR depuis: https://github.com/UB-Mannheim/tesseract/wiki
+# 2. Ajouter Tesseract au PATH système
+# 3. pip install -r requirements.txt
+# 4. Lancer: python main.py
+# 5. Ouvrir navigateur: http://localhost:5000

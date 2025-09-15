@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 Last War Alerts - Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .dashboard-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            margin: 20px;
+            padding: 30px;
+        }
+        
+        .status-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 10px 0;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            border-left: 5px solid #007bff;
+        }
+        
+        .status-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+        
+        .status-card.success { border-left-color: #28a745; }
+        .status-card.warning { border-left-color: #ffc107; }
+        .status-card.danger { border-left-color: #dc3545; }
+        .status-card.info { border-left-color: #17a2b8; }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .metric-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .alert-history {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+        }
+        
+        .alert-item {
+            background: white;
+            border-radius: 8px;
+            padding: 10px 15px;
+            margin: 5px 0;
+            border-left: 4px solid #ffc107;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .alert-item.recent {
+            animation: pulse 2s infinite;
+            border-left-color: #dc3545;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+        }
+        
+        .header-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+        }
+        
+        .update-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        
+        .offline-indicator {
+            background: #dc3545;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: none;
+        }
+        
+        .online-indicator {
+            background: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+        }
+        
+        .screenshot-thumbnail {
+            width: 100px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 5px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .screenshot-thumbnail:hover {
+            border-color: #007bff;
+            transform: scale(1.05);
+        }
+        
+        .detection-area {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .detection-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #dc3545;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .alerts-history-container {
+            max-height: 500px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+        }
+        
+        .alert-history-item {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 10px 0;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            border-left: 4px solid #dc3545;
+            transition: all 0.3s ease;
+        }
+        
+        .alert-history-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+        }
+        
+        .alert-history-item.recent {
+            border-left-color: #ff4757;
+            animation: pulseAlert 3s infinite;
+        }
+        
+        @keyframes pulseAlert {
+            0% { background-color: white; }
+            50% { background-color: #fff5f5; }
+            100% { background-color: white; }
+        }
+        
+        .alert-screenshot {
+            width: 120px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid #ddd;
+            transition: all 0.3s ease;
+        }
+        
+        .alert-screenshot:hover {
+            border-color: #dc3545;
+            transform: scale(1.1);
+        }
+        
+        .alert-info {
+            flex: 1;
+            margin-left: 15px;
+        }
+        
+        .alert-title {
+            font-weight: bold;
+            color: #dc3545;
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+        }
+        
+        .alert-source {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+        
+        .alert-confidence {
+            background: #28a745;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            display: inline-block;
+        }
+        
+        .alert-time {
+            color: #6c757d;
+            font-size: 0.85rem;
+            text-align: right;
+        }
+        
+        .no-alerts-message {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6c757d;
+        }
+        
+        .live-thumbnail {
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+        
+        .live-thumbnail.updating {
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="update-indicator">
+        <div id="connection-status" class="online-indicator">
+            <i class="fas fa-wifi"></i> En ligne
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <div class="dashboard-container">
+            <!-- En-tête -->
+            <div class="text-center mb-4">
+                <h1 class="display-4">🎮 Last War Alerts</h1>
+                <p class="lead">Système de détection temps réel</p>
+            </div>
+            
+            <!-- Statistiques globales -->
+            <div class="header-stats">
+                <div class="stat-box">
+                    <div class="metric-value" id="uptime">00:00:00</div>
+                    <div class="metric-label">Temps de fonctionnement</div>
+                </div>
+                <div class="stat-box">
+                    <div class="metric-value" id="total-cycles">0</div>
+                    <div class="metric-label">Cycles exécutés</div>
+                </div>
+                <div class="stat-box">
+                    <div class="metric-value" id="obs-reconnections">0</div>
+                    <div class="metric-label">Reconnexions OBS</div>
+                </div>
+                <div class="stat-box">
+                    <div class="metric-value" id="total-alerts">0</div>
+                    <div class="metric-label">Alertes détectées</div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <!-- Statut des sources -->
+                <div class="col-lg-7">
+                    <h3><i class="fas fa-desktop"></i> Statut des Sources</h3>
+                    <div id="sources-container">
+                        <!-- Les cartes de statut seront générées ici -->
+                    </div>
+                </div>
+                
+                <!-- Historique des alertes -->
+                <div class="col-lg-5">
+                    <div class="row">
+                        <!-- Alertes récentes (texte seulement) -->
+                        <div class="col-12 mb-4">
+                            <h4><i class="fas fa-bell"></i> Alertes Récentes</h4>
+                            <div class="alert-history" id="alerts-history">
+                                <div class="text-center text-muted">
+                                    <i class="fas fa-clock fa-2x mb-3"></i>
+                                    <p>Aucune alerte récente</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Historique avec screenshots -->
+                        <div class="col-12">
+                            <h4><i class="fas fa-camera"></i> Historique avec Screenshots</h4>
+                            <div class="alerts-history-container" id="alerts-history-screenshots">
+                                <div class="no-alerts-message">
+                                    <i class="fas fa-images fa-3x mb-3"></i>
+                                    <p>Aucune alerte avec screenshot</p>
+                                    <small class="text-muted">Les alertes détectées avec leurs screenshots apparaîtront ici</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-3">
+                        <button class="btn btn-outline-danger" onclick="resetStats()">
+                            <i class="fas fa-trash"></i> Réinitialiser
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal pour agrandir les screenshots -->
+    <div class="modal fade" id="screenshotModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="screenshotModalTitle">Screenshot</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="screenshotModalImage" class="img-fluid" alt="Screenshot" style="max-height: 70vh;">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    <button type="button" class="btn btn-primary" onclick="downloadScreenshot()">
+                        <i class="fas fa-download"></i> Télécharger
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let isOnline = true;
+        let lastUpdate = Date.now();
+        let currentScreenshotUrl = '';
+        let lastAlertHistoryCount = 0;
+        
+        function updateData() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    updateGlobalStats(data.global_stats, data.uptime);
+                    updateSourcesStatus(data.windows_state);
+                    updateAlertsHistory(data.alerts_history);
+                    
+                    lastUpdate = Date.now();
+                    updateConnectionStatus(true);
+                })
+                .catch(error => {
+                    console.error('Erreur de mise à jour:', error);
+                    updateConnectionStatus(false);
+                });
+            
+            fetch('/api/alerts/history')
+                .then(response => response.json())
+                .then(data => {
+                    updateAlertsWithScreenshots(data.alerts_with_screenshots);
+                })
+                .catch(error => {
+                    console.error('Erreur mise à jour historique:', error);
+                });
+        }
+        
+        function updateGlobalStats(globalStats, uptime) {
+            document.getElementById('uptime').textContent = uptime;
+            document.getElementById('total-cycles').textContent = globalStats.total_cycles || 0;
+            document.getElementById('obs-reconnections').textContent = globalStats.obs_reconnections || 0;
+        }
+        
+        function updateSourcesStatus(windowsState) {
+            const container = document.getElementById('sources-container');
+            container.innerHTML = '';
+            
+            let totalAlerts = 0;
+            
+            Object.values(windowsState).forEach(source => {
+                totalAlerts += source.total_detections || 0;
+                
+                const card = document.createElement('div');
+                card.className = `status-card ${source.status_color}`;
+                
+                const statusIcon = getStatusIcon(source.status);
+                const confidenceColor = getConfidenceColor(source.last_confidence);
+                
+                let screenshotSection = '';
+                if (source.has_screenshot) {
+                    screenshotSection = `
+                        <div class="col-md-2">
+                            <div class="text-center">
+                                <div class="detection-area">
+                                    <img src="${source.screenshot_url}" 
+                                         class="screenshot-thumbnail live-thumbnail" 
+                                         onclick="showScreenshotModal('${source.source_name}', '${source.screenshot_url}')"
+                                         alt="Capture ${source.source_name}"
+                                         loading="lazy">
+                                    ${source.has_detection ? '<div class="detection-badge">!</div>' : ''}
+                                </div>
+                                ${source.has_detection ? `
+                                    <div class="mt-1">
+                                        <small class="text-success">Zone détectée</small>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                card.innerHTML = `
+                    <div class="row align-items-center">
+                        <div class="col-md-3">
+                            <h5 class="mb-1">${statusIcon} ${source.source_name}</h5>
+                            <span class="badge bg-${source.status_color}">${source.status}</span>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="metric-value" style="font-size: 1.2rem;">${source.last_capture_relative}</div>
+                            <div class="metric-label">Dernière capture</div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="metric-value" style="font-size: 1.2rem; color: ${confidenceColor};">
+                                ${source.confidence_percent}
+                            </div>
+                            <div class="metric-label">Confiance</div>
+                        </div>
+                        <div class="col-md-1">
+                            <div class="metric-value" style="font-size: 1.2rem;">${source.total_detections}</div>
+                            <div class="metric-label">Détections</div>
+                        </div>
+                        <div class="col-md-1">
+                            <div class="metric-value" style="font-size: 1.2rem; color: ${getSuccessRateColor(source.success_rate)};">
+                                ${source.success_rate.toFixed(0)}%
+                            </div>
+                            <div class="metric-label">Succès</div>
+                        </div>
+                        ${screenshotSection}
+                        <div class="col-md-1">
+                            ${source.error_count > 0 ? `<span class="badge bg-danger">${source.error_count}</span>` : '<span class="text-success">✓</span>'}
+                        </div>
+                    </div>
+                    ${source.last_alert_name !== 'Aucune' ? `
+                        <div class="mt-2">
+                            <small class="text-muted">Dernière alerte: <strong>${source.last_alert_name}</strong></small>
+                        </div>
+                    ` : ''}
+                    ${source.last_error ? `
+                        <div class="mt-2">
+                            <small class="text-danger"><i class="fas fa-exclamation-triangle"></i> ${source.last_error}</small>
+                        </div>
+                    ` : ''}
+                `;
+                
+                container.appendChild(card);
+            });
+            
+            document.getElementById('total-alerts').textContent = totalAlerts;
+        }
+        
+        function updateAlertsHistory(alerts) {
+            const container = document.getElementById('alerts-history');
+            
+            if (alerts.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-muted">
+                        <i class="fas fa-clock fa-2x mb-3"></i>
+                        <p>Aucune alerte récente</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            alerts.slice(-10).reverse().forEach(alert => {
+                const alertDiv = document.createElement('div');
+                const isRecent = (Date.now() - new Date(alert.timestamp)) < 30000;
+                alertDiv.className = `alert-item ${isRecent ? 'recent' : ''}`;
+                
+                const time = new Date(alert.timestamp).toLocaleTimeString();
+                
+                alertDiv.innerHTML = `
+                    <div>
+                        <strong>${alert.alert_name}</strong>
+                        <br>
+                        <small class="text-muted">${alert.source_name}</small>
+                    </div>
+                    <div class="text-end">
+                        <div class="text-success">${alert.confidence_percent}</div>
+                        <small class="text-muted">${time}</small>
+                    </div>
+                `;
+                
+                container.appendChild(alertDiv);
+            });
+        }
+        
+        function updateAlertsWithScreenshots(alertsWithScreenshots) {
+            const container = document.getElementById('alerts-history-screenshots');
+            
+            if (!alertsWithScreenshots || alertsWithScreenshots.length === 0) {
+                container.innerHTML = `
+                    <div class="no-alerts-message">
+                        <i class="fas fa-images fa-3x mb-3"></i>
+                        <p>Aucune alerte avec screenshot</p>
+                        <small class="text-muted">Les alertes détectées avec leurs screenshots apparaîtront ici</small>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (alertsWithScreenshots.length > lastAlertHistoryCount && lastAlertHistoryCount > 0) {
+                showNotification('Nouvelle alerte détectée!', 'Une nouvelle alerte avec screenshot est disponible.');
+            }
+            lastAlertHistoryCount = alertsWithScreenshots.length;
+            
+            container.innerHTML = '';
+            
+            alertsWithScreenshots.slice().reverse().forEach(alert => {
+                const alertDiv = document.createElement('div');
+                const isRecent = (Date.now() - new Date(alert.timestamp)) < 60000;
+                alertDiv.className = `alert-history-item ${isRecent ? 'recent' : ''}`;
+                
+                const time = new Date(alert.timestamp).toLocaleTimeString();
+                const relativeTime = getRelativeTime(alert.timestamp);
+                
+                alertDiv.innerHTML = `
+                    <div class="d-flex align-items-start">
+                        <img src="${alert.screenshot_url}" 
+                             class="alert-screenshot" 
+                             onclick="showScreenshotModal('${alert.source_name} - ${alert.alert_name}', '${alert.screenshot_url}')"
+                             alt="Screenshot ${alert.alert_name}"
+                             loading="lazy">
+                        <div class="alert-info">
+                            <div class="alert-title">${alert.alert_name}</div>
+                            <div class="alert-source">
+                                <i class="fas fa-desktop"></i> ${alert.source_name}
+                            </div>
+                            <div class="mb-2">
+                                <span class="alert-confidence">${alert.confidence_percent}</span>
+                                ${alert.detection_area ? '<span class="badge bg-info ms-2">Zone détectée</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="alert-time">
+                            <div>${time}</div>
+                            <small class="text-muted">${relativeTime}</small>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(alertDiv);
+            });
+        }
+        
+        function getRelativeTime(timestamp) {
+            const now = new Date();
+            const alertTime = new Date(timestamp);
+            const diffMs = now - alertTime;
+            const diffSeconds = Math.floor(diffMs / 1000);
+            const diffMinutes = Math.floor(diffSeconds / 60);
+            const diffHours = Math.floor(diffMinutes / 60);
+            
+            if (diffSeconds < 60) {
+                return `${diffSeconds}s`;
+            } else if (diffMinutes < 60) {
+                return `${diffMinutes}min`;
+            } else {
+                return `${diffHours}h`;
+            }
+        }
+        
+        function updateConnectionStatus(online) {
+            const indicator = document.getElementById('connection-status');
+            
+            if (online && !isOnline) {
+                indicator.className = 'online-indicator';
+                indicator.innerHTML = '<i class="fas fa-wifi"></i> En ligne';
+                isOnline = true;
+            } else if (!online && isOnline) {
+                indicator.className = 'offline-indicator';
+                indicator.innerHTML = '<i class="fas fa-wifi-slash"></i> Hors ligne';
+                indicator.style.display = 'block';
+                isOnline = false;
+            }
+        }
+        
+        function getStatusIcon(status) {
+            switch(status) {
+                case 'OK': return '<i class="fas fa-check-circle text-success"></i>';
+                case 'ALERTE': return '<i class="fas fa-exclamation-circle text-warning"></i>';
+                case 'ERREUR': return '<i class="fas fa-times-circle text-danger"></i>';
+                case 'Instable': return '<i class="fas fa-question-circle text-info"></i>';
+                default: return '<i class="fas fa-circle text-secondary"></i>';
+            }
+        }
+        
+        function getConfidenceColor(confidence) {
+            if (confidence >= 0.8) return '#28a745';
+            if (confidence >= 0.5) return '#ffc107';
+            return '#dc3545';
+        }
+        
+        function getSuccessRateColor(rate) {
+            if (rate >= 90) return '#28a745';
+            if (rate >= 70) return '#ffc107';
+            return '#dc3545';
+        }
+        
+        function resetStats() {
+            if (confirm('Êtes-vous sûr de vouloir réinitialiser toutes les statistiques et l\'historique ?')) {
+                fetch('/api/reset_stats', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showNotification('Statistiques réinitialisées', 'Toutes les données ont été effacées.');
+                            updateData();
+                            lastAlertHistoryCount = 0;
+                        } else {
+                            alert('Erreur: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        alert('Erreur de communication: ' + error);
+                    });
+            }
+        }
+        
+        function showScreenshotModal(sourceName, screenshotUrl) {
+            const modal = new bootstrap.Modal(document.getElementById('screenshotModal'));
+            document.getElementById('screenshotModalTitle').textContent = `Screenshot - ${sourceName}`;
+            document.getElementById('screenshotModalImage').src = screenshotUrl;
+            currentScreenshotUrl = screenshotUrl;
+            modal.show();
+        }
+        
+        function downloadScreenshot() {
+            if (currentScreenshotUrl) {
+                const link = document.createElement('a');
+                link.href = currentScreenshotUrl;
+                link.download = `screenshot_${new Date().getTime()}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+        
+        function showNotification(title, message) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(title, {
+                    body: message,
+                    icon: '/static/favicon.ico'
+                });
+            }
+        }
+        
+        // Démarrage
+        updateData();
+        setInterval(updateData, 2000);
+        
+        // Vérification de connexion
+        setInterval(() => {
+            if (Date.now() - lastUpdate > 10000) {
+                updateConnectionStatus(false);
+            }
+        }, 5000);
+        
+        // Demander permission pour les notifications
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    </script>
+</body>
+</html>

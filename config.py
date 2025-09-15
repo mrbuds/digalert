@@ -1,0 +1,343 @@
+# -*- coding: utf-8 -*-
+import os
+from collections import deque
+
+# Configuration des fenêtres avec paramètres spécifiques
+SOURCE_WINDOWS = [
+    {
+        "source_name": "last war!",
+        "window_title": "Last War-Survival Game", 
+        "notification_cooldown": 30,
+        "priority": 1  # Priorité haute
+    },
+    {
+        "source_name": "bluestack",
+        "window_title": "BlueStacks App Player",
+        "notification_cooldown": 45,  # Cooldown plus long
+        "priority": 2  # Priorité normale
+    },
+]
+
+# Intervalles de temps (en secondes)
+CHECK_INTERVAL = 2
+COOLDOWN_PERIOD = 30
+WINDOW_RETRY_INTERVAL = 5
+OBS_RECONNECT_INTERVAL = 10
+
+# Paramètres de détection
+HISTORY_LEN = 20  # Augmenté pour de meilleures statistiques
+CONSECUTIVE_DETECTIONS_REQUIRED = 3  # Détections consécutives avant notification
+
+# Paramètres de performance
+MAX_CAPTURE_TIME_MS = 5000  # Timeout de capture
+MAX_CONSECUTIVE_FAILURES = 10  # Échecs avant pause longue
+STATISTICS_SAVE_INTERVAL = 300  # Sauvegarde toutes les 5 minutes
+
+# Configuration des alertes avec paramètres étendus
+ALERTS = [
+    {
+        "img": "DIG.png",
+        "name": "Dig!",
+        "threshold": 0.7,
+        "debug": False,
+        "history": deque(maxlen=HISTORY_LEN),
+        "priority": "high",
+        "color": "\033[92m",  # Vert
+        "sound_file": None,  # Optionnel: fichier son
+        "min_area": 100,  # Aire minimale de détection
+    },
+    {
+        "img": "egg.png", 
+        "name": "EGGGGGG!",
+        "threshold": 0.8,
+        "debug": False,
+        "history": deque(maxlen=HISTORY_LEN),
+        "priority": "critical", 
+        "color": "\033[91m",  # Rouge
+        "sound_file": None,
+        "min_area": 150,
+    },
+    # Alertes OCR désactivées mais prêtes à l'emploi
+    {
+        "ocr": "alliage",
+        "name": "TITANIUM!",
+        "threshold": 0.8,
+        "debug": False,
+        "history": deque(maxlen=HISTORY_LEN),
+        "priority": "medium",
+        "color": "\033[94m",  # Bleu
+        "enabled": False,  # Désactivée par défaut
+        "language": "fra",
+        "ocr_config": "--oem 3 --psm 6",
+    },
+    {
+        "ocr": "Fournitures",
+        "name": "FOURNITURES!",
+        "threshold": 0.8,
+        "debug": False,
+        "history": deque(maxlen=HISTORY_LEN),
+        "priority": "medium",
+        "color": "\033[93m",  # Jaune
+        "enabled": False,
+        "language": "fra",
+        "ocr_config": "--oem 3 --psm 6",
+    },
+    {
+        "ocr": "charbon",
+        "name": "CHARBON!",
+        "threshold": 0.8,
+        "debug": False,
+        "history": deque(maxlen=HISTORY_LEN),
+        "priority": "low",
+        "color": "\033[90m",  # Gris
+        "enabled": False,
+        "language": "fra", 
+        "ocr_config": "--oem 3 --psm 6",
+    },
+]
+
+# Filtrer les alertes activées
+ACTIVE_ALERTS = [alert for alert in ALERTS if alert.get("enabled", True)]
+
+# Configuration OBS WebSocket
+OBS_WS_HOST = "localhost"
+OBS_WS_PORT = 4455
+OBS_WS_PASSWORD = ""
+OBS_CONNECTION_TIMEOUT = 10
+
+# Configuration des logs
+LOG_LEVEL = "INFO"  # DEBUG, INFO, WARN, ERROR
+LOG_TO_FILE = True
+LOG_FILE = "last_war_alerts.log"
+LOG_MAX_SIZE_MB = 10
+LOG_BACKUP_COUNT = 3
+
+# Configuration de l'affichage
+DISPLAY_REFRESH_RATE = 1.0  # Hz
+SHOW_PERFORMANCE_STATS = True
+SHOW_CONFIDENCE_HISTORY = True
+CONSOLE_WIDTH = 120
+
+# Configuration des notifications
+NOTIFICATION_QUEUE_SIZE = 10
+NOTIFICATION_RETRY_ATTEMPTS = 3
+NOTIFICATION_RETRY_DELAY = 2
+BLACK_SCREEN_NOTIFICATION_COOLDOWN = 60  # Cooldown pour notifications d'écran noir (secondes)
+
+# Paramètres de debugging avancé
+DEBUG_SAVE_SCREENSHOTS = False  # Sauvegarde des captures pour debug
+DEBUG_SCREENSHOT_PATH = "debug_screenshots/"
+DEBUG_SAVE_FAILED_DETECTIONS = False
+DEBUG_SHOW_DETECTION_AREAS = False
+
+# Configuration de la récupération automatique
+AUTO_RESTART_ON_CRITICAL_ERROR = True
+MAX_RESTART_ATTEMPTS = 3
+RESTART_DELAY = 30
+
+# Seuils de performance et alertes
+PERFORMANCE_THRESHOLDS = {
+    "max_capture_time_ms": 2000,
+    "min_success_rate": 0.8,
+    "max_error_rate": 0.1,
+    "max_queue_size": 5
+}
+
+# Configuration des statistiques
+STATISTICS = {
+    "save_interval": 300,  # 5 minutes
+    "keep_history_hours": 24,
+    "export_csv": False,
+    "export_path": "statistics/"
+}
+
+# Messages personnalisés
+MESSAGES = {
+    "startup": "🎮 Système de détection Last War démarré",
+    "shutdown": "🛑 Arrêt du système de détection",
+    "obs_connected": "✅ Connexion OBS établie",
+    "obs_disconnected": "❌ Connexion OBS perdue",
+    "alert_detected": "🚨 Alerte détectée",
+    "notification_sent": "📬 Notification envoyée",
+    "error_occurred": "⚠️ Erreur détectée"
+}
+
+# Couleurs pour l'affichage console
+COLORS = {
+    "RESET": "\033[0m",
+    "RED": "\033[91m",
+    "GREEN": "\033[92m", 
+    "YELLOW": "\033[93m",
+    "BLUE": "\033[94m",
+    "PURPLE": "\033[95m",
+    "CYAN": "\033[96m",
+    "WHITE": "\033[97m",
+    "BOLD": "\033[1m"
+}
+
+# Configuration de récupération d'erreurs
+ERROR_RECOVERY = {
+    "obs_connection": {
+        "max_retries": 5,
+        "retry_delay": 5,
+        "exponential_backoff": True
+    },
+    "capture_failure": {
+        "max_consecutive": 10,
+        "pause_duration": 30,
+        "reset_threshold": 3
+    },
+    "notification_failure": {
+        "max_retries": 3,
+        "retry_delay": 2,
+        "fallback_method": "console"  # console, file, none
+    }
+}
+
+
+def validate_configuration():
+    """Valide la configuration au démarrage"""
+    errors = []
+    warnings = []
+    
+    # Vérifier les images d'alerte
+    for alert in ALERTS:
+        if 'img' in alert:
+            if not os.path.exists(alert['img']):
+                errors.append(f"Image manquante: {alert['img']} pour {alert['name']}")
+            else:
+                # Vérifier que le fichier est lisible
+                try:
+                    with open(alert['img'], 'rb') as f:
+                        # Lire les premiers bytes pour vérifier que c'est un fichier image
+                        header = f.read(8)
+                        if not (header.startswith(b'\x89PNG') or 
+                               header.startswith(b'\xff\xd8\xff') or
+                               header.startswith(b'GIF')):
+                            warnings.append(f"Fichier {alert['img']} n'est peut-être pas une image valide")
+                except Exception as e:
+                    errors.append(f"Impossible de lire {alert['img']}: {e}")
+    
+    # Vérifier et créer les dossiers nécessaires
+    required_dirs = [
+        'logs',
+        'static/screenshots', 
+        'debug_screenshots',
+        'statistics',
+        'templates'
+    ]
+    
+    for dir_path in required_dirs:
+        if not os.path.exists(dir_path):
+            try:
+                os.makedirs(dir_path, exist_ok=True)
+                warnings.append(f"Dossier créé: {dir_path}")
+            except Exception as e:
+                errors.append(f"Impossible de créer le dossier {dir_path}: {e}")
+    
+    # Vérifier la configuration OBS
+    if not isinstance(OBS_WS_PORT, int) or OBS_WS_PORT < 1 or OBS_WS_PORT > 65535:
+        errors.append(f"Port OBS invalide: {OBS_WS_PORT}")
+    
+    # Vérifier les intervalles de temps
+    if CHECK_INTERVAL <= 0:
+        errors.append("CHECK_INTERVAL doit être > 0")
+    
+    if COOLDOWN_PERIOD <= 0:
+        errors.append("COOLDOWN_PERIOD doit être > 0")
+    
+    # Vérifier les seuils
+    for alert in ALERTS:
+        threshold = alert.get('threshold', 0)
+        if not isinstance(threshold, (int, float)) or threshold < 0 or threshold > 1:
+            errors.append(f"Seuil invalide pour {alert.get('name', 'unknown')}: {threshold}")
+    
+    # Vérifier les sources configurées
+    if not SOURCE_WINDOWS:
+        warnings.append("Aucune fenêtre source configurée")
+    
+    for window in SOURCE_WINDOWS:
+        if not window.get('source_name'):
+            errors.append("source_name manquant dans la configuration de fenêtre")
+        if not window.get('window_title'):
+            errors.append("window_title manquant dans la configuration de fenêtre")
+    
+    # Vérifier la taille de l'historique
+    if HISTORY_LEN < 5:
+        warnings.append("HISTORY_LEN très petit, cela peut affecter les statistiques")
+    
+    return len(errors) == 0, errors, warnings
+
+
+def get_configuration_summary():
+    """Retourne un résumé de la configuration"""
+    return {
+        'sources_configured': len(SOURCE_WINDOWS),
+        'alerts_total': len(ALERTS),
+        'alerts_active': len(ACTIVE_ALERTS),
+        'check_interval': CHECK_INTERVAL,
+        'debug_mode': DEBUG_SAVE_SCREENSHOTS,
+        'log_to_file': LOG_TO_FILE,
+        'obs_host': OBS_WS_HOST,
+        'obs_port': OBS_WS_PORT
+    }
+
+
+def create_default_config_file():
+    """Crée un fichier de configuration par défaut si nécessaire"""
+    config_file = "config_backup.py"
+    
+    if not os.path.exists(config_file):
+        try:
+            with open(config_file, 'w', encoding='utf-8') as f:
+                f.write("""# Configuration de sauvegarde pour Last War Alerts
+# Ce fichier est généré automatiquement
+
+# Pour restaurer cette configuration, copiez ce fichier vers config.py
+
+SOURCE_WINDOWS = [
+    {
+        "source_name": "last war!",
+        "window_title": "Last War-Survival Game",
+        "notification_cooldown": 30,
+        "priority": 1
+    },
+    {
+        "source_name": "bluestack", 
+        "window_title": "BlueStacks App Player",
+        "notification_cooldown": 45,
+        "priority": 2
+    }
+]
+
+# Ajoutez vos alertes personnalisées ici...
+""")
+            return True
+        except Exception as e:
+            print(f"Erreur création fichier config: {e}")
+            return False
+    
+    return True
+
+
+# Validation automatique au chargement du module
+if __name__ == "__main__":
+    valid, errors, warnings = validate_configuration()
+    
+    if errors:
+        print("❌ Erreurs de configuration:")
+        for error in errors:
+            print(f"  - {error}")
+    
+    if warnings:
+        print("⚠️ Avertissements:")
+        for warning in warnings:
+            print(f"  - {warning}")
+    
+    if valid:
+        print("✅ Configuration valide")
+        summary = get_configuration_summary()
+        print(f"📊 Résumé: {summary['alerts_active']}/{summary['alerts_total']} alertes actives, "
+              f"{summary['sources_configured']} sources")
+    else:
+        print("❌ Configuration invalide - corrigez les erreurs avant de continuer")
