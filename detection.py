@@ -5,7 +5,7 @@ import numpy as np
 import time
 import os
 from utils import log_error, log_debug, log_warning, log_info, ensure_directory_exists
-from config import DEBUG_SAVE_SCREENSHOTS, DEBUG_SCREENSHOT_PATH, DEBUG_SHOW_DETECTION_AREAS
+from config import DEBUG_SAVE_SCREENSHOTS, DEBUG_SCREENSHOT_PATH, DEBUG_SHOW_DETECTION_AREAS, get_alert_images
 
 # Configuration for Tesseract OCR
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -22,13 +22,34 @@ class DetectionStats:
         self.template_cache = {}
         self.detection_times = []
         self.confidence_history = []
+        # NOUVEAU: Statistiques multi-images
+        self.multi_image_stats = {}  # Stats par alerte multi-image
     
-    def add_detection(self, success, confidence, duration_ms):
+    def add_detection(self, success, confidence, duration_ms, alert_name=None, matched_image=None):
         self.total_detections += 1
         if success:
             self.successful_detections += 1
         self.detection_times.append(duration_ms)
         self.confidence_history.append(confidence)
+        
+        # NOUVEAU: Suivi des stats par image utilisée
+        if alert_name and matched_image:
+            if alert_name not in self.multi_image_stats:
+                self.multi_image_stats[alert_name] = {}
+            
+            if matched_image not in self.multi_image_stats[alert_name]:
+                self.multi_image_stats[alert_name][matched_image] = {
+                    'detections': 0,
+                    'total_confidence': 0.0,
+                    'max_confidence': 0.0,
+                    'avg_confidence': 0.0
+                }
+            
+            stats = self.multi_image_stats[alert_name][matched_image]
+            stats['detections'] += 1
+            stats['total_confidence'] += confidence
+            stats['max_confidence'] = max(stats['max_confidence'], confidence)
+            stats['avg_confidence'] = stats['total_confidence'] / stats['detections']
     
     @property
     def average_detection_time(self):
@@ -45,10 +66,10 @@ detection_stats = DetectionStats()
 def cleanup_template_cache_if_needed():
     """Nettoie le cache si trop volumineux"""
     global detection_stats
-    if len(detection_stats.template_cache) > 10:
-        # Garder seulement les 5 plus récents
+    if len(detection_stats.template_cache) > 20:  # Augmenté pour multi-images
+        # Garder seulement les 10 plus récents
         items = list(detection_stats.template_cache.items())
-        detection_stats.template_cache = dict(items[-5:])
+        detection_stats.template_cache = dict(items[-10:])
         log_debug("Cache des templates nettoyé")
 
 
@@ -170,6 +191,89 @@ def template_matching_multi_scale(screenshot, template, threshold, scales=[0.8, 
     return best_match
 
 
+def check_multiple_templates(screenshot, template_paths, threshold, match_strategy="best"):
+    """
+    NOUVEAU: Vérifie plusieurs templates et retourne le(s) meilleur(s) résultat(s)
+    
+    Args:
+        screenshot: Image de capture
+        template_paths: Liste des chemins des templates
+        threshold: Seuil de confiance minimum
+        match_strategy: "best", "first", "all" - stratégie de correspondance
+    
+    Returns:
+        dict avec les informations du/des match(s)
+    """
+    if not template_paths:
+        return None
+    
+    processed_screenshot = preprocess_image_for_detection(screenshot, 'template')
+    if processed_screenshot is None:
+        return None
+    
+    results = []
+    
+    for template_path in template_paths:
+        try:
+            template = load_template_cached(template_path)
+            if template is None:
+                log_debug(f"Template non chargé: {template_path}")
+                continue
+            
+            processed_template = preprocess_image_for_detection(template, 'template')
+            if processed_template is None:
+                continue
+            
+            # Template matching multi-échelle
+            match_result = template_matching_multi_scale(
+                processed_screenshot, 
+                processed_template, 
+                threshold
+            )
+            
+            if match_result and match_result['confidence'] >= threshold:
+                match_result['template_path'] = template_path
+                match_result['template_name'] = os.path.basename(template_path)
+                results.append(match_result)
+                
+                log_debug(f"Correspondance trouvée: {template_path} "
+                         f"(confiance: {match_result['confidence']:.3f})")
+                
+                # Stratégie "first": s'arrêter à la première correspondance
+                if match_strategy == "first":
+                    break
+        
+        except Exception as e:
+            log_error(f"Erreur vérification template {template_path}: {e}")
+            continue
+    
+    if not results:
+        return None
+    
+    # Appliquer la stratégie de correspondance
+    if match_strategy == "best":
+        # Retourner le meilleur résultat
+        best_result = max(results, key=lambda x: x['confidence'])
+        return best_result
+    
+    elif match_strategy == "first":
+        # Retourner le premier résultat (déjà géré dans la boucle)
+        return results[0]
+    
+    elif match_strategy == "all":
+        # Retourner tous les résultats
+        return {
+            'matches': results,
+            'best_confidence': max(r['confidence'] for r in results),
+            'match_count': len(results),
+            'strategy': 'all'
+        }
+    
+    else:
+        log_warning(f"Stratégie de correspondance inconnue: {match_strategy}")
+        return max(results, key=lambda x: x['confidence'])
+
+
 def save_detection_debug(screenshot, alert, match_result, detection_success):
     """Sauvegarde les informations de debug pour une détection"""
     if not DEBUG_SAVE_SCREENSHOTS:
@@ -190,17 +294,31 @@ def save_detection_debug(screenshot, alert, match_result, detection_success):
         if detection_success and match_result and DEBUG_SHOW_DETECTION_AREAS:
             marked_screenshot = screenshot.copy()
             
-            if 'img' in alert and 'location' in match_result:
-                x, y = match_result['location']
-                h, w = match_result['template_size']
-                
-                # Rectangle de détection
-                cv2.rectangle(marked_screenshot, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                
-                # Texte avec confidence
-                confidence = match_result.get('confidence', 0)
-                text = f"{alert['name']}: {confidence:.3f}"
-                cv2.putText(marked_screenshot, text, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            # Support multi-correspondance
+            matches_to_mark = []
+            if 'matches' in match_result:  # Stratégie "all"
+                matches_to_mark = match_result['matches']
+            else:  # Stratégies "best" ou "first"
+                matches_to_mark = [match_result]
+            
+            for i, match in enumerate(matches_to_mark):
+                if 'location' in match:
+                    x, y = match['location']
+                    h, w = match['template_size']
+                    
+                    # Couleur différente pour chaque correspondance
+                    colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0)]
+                    color = colors[i % len(colors)]
+                    
+                    # Rectangle de détection
+                    cv2.rectangle(marked_screenshot, (x, y), (x + w, y + h), color, 2)
+                    
+                    # Texte avec confidence et nom du template
+                    confidence = match.get('confidence', 0)
+                    template_name = match.get('template_name', 'unknown')
+                    text = f"{template_name}: {confidence:.3f}"
+                    cv2.putText(marked_screenshot, text, (x, y-10), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
                 
                 marked_file = f"{DEBUG_SCREENSHOT_PATH}/{alert_name}_{timestamp}_marked.png"
                 cv2.imwrite(marked_file, marked_screenshot)
@@ -212,11 +330,22 @@ def save_detection_debug(screenshot, alert, match_result, detection_success):
             f.write(f"Timestamp: {timestamp}\n")
             f.write(f"Detection: {detection_success}\n")
             f.write(f"Threshold: {alert.get('threshold', 'N/A')}\n")
+            f.write(f"Match Strategy: {alert.get('match_strategy', 'best')}\n")
             
             if match_result:
-                f.write(f"Confidence: {match_result.get('confidence', 'N/A')}\n")
-                f.write(f"Location: {match_result.get('location', 'N/A')}\n")
-                f.write(f"Scale: {match_result.get('scale', 'N/A')}\n")
+                if 'matches' in match_result:  # Stratégie "all"
+                    f.write(f"Multiple matches: {match_result['match_count']}\n")
+                    for i, match in enumerate(match_result['matches']):
+                        f.write(f"  Match {i+1}:\n")
+                        f.write(f"    Template: {match.get('template_name', 'N/A')}\n")
+                        f.write(f"    Confidence: {match.get('confidence', 'N/A')}\n")
+                        f.write(f"    Location: {match.get('location', 'N/A')}\n")
+                        f.write(f"    Scale: {match.get('scale', 'N/A')}\n")
+                else:  # Stratégies "best" ou "first"
+                    f.write(f"Template: {match_result.get('template_name', 'N/A')}\n")
+                    f.write(f"Confidence: {match_result.get('confidence', 'N/A')}\n")
+                    f.write(f"Location: {match_result.get('location', 'N/A')}\n")
+                    f.write(f"Scale: {match_result.get('scale', 'N/A')}\n")
             
             f.write(f"Screenshot shape: {screenshot.shape}\n")
         
@@ -228,7 +357,7 @@ def save_detection_debug(screenshot, alert, match_result, detection_success):
 
 def check_for_alert(screenshot, alert, return_confidence=False, return_area=False):
     """
-    Détection d'alerte améliorée avec support multi-méthode et zone de détection
+    Détection d'alerte améliorée avec support multi-méthode et multi-images
     """
     start_time = time.time()
     
@@ -249,50 +378,70 @@ def check_for_alert(screenshot, alert, return_confidence=False, return_area=Fals
         detection_success = False
         match_result = None
         detection_area = None
+        matched_template = None
 
-        # Méthode 1: Détection par template matching
-        if 'img' in alert:
-            template = load_template_cached(alert['img'])
-            if template is None:
-                log_error(f"Impossible de charger le template {alert['img']}")
+        # Méthode 1: Détection par template matching (nouveau système multi-images)
+        if 'imgs' in alert or 'img' in alert:
+            template_paths = get_alert_images(alert)
+            
+            if not template_paths:
+                log_error(f"Aucune image spécifiée pour {alert.get('name', 'unknown')}")
                 if return_area:
                     return (0.0, None) if return_confidence else (False, None)
                 return 0.0 if return_confidence else False
 
-            # Prétraitement de l'image
-            processed_screenshot = preprocess_image_for_detection(screenshot, 'template')
-            processed_template = preprocess_image_for_detection(template, 'template')
-
-            # Template matching multi-échelle
-            match_result = template_matching_multi_scale(
-                processed_screenshot, 
-                processed_template, 
-                alert['threshold']
+            # Stratégie de correspondance
+            match_strategy = alert.get('match_strategy', 'best')
+            threshold = alert['threshold']
+            
+            # NOUVEAU: Vérification de plusieurs templates
+            match_result = check_multiple_templates(
+                screenshot, 
+                template_paths, 
+                threshold, 
+                match_strategy
             )
             
             if match_result:
-                confidence = match_result['confidence']
-                detection_success = confidence >= alert['threshold']
+                if 'matches' in match_result:  # Stratégie "all"
+                    confidence = match_result['best_confidence']
+                    detection_success = confidence >= threshold
+                    matched_template = f"Multiple ({match_result['match_count']})"
+                    
+                    # Utiliser la meilleure correspondance pour la zone
+                    best_match = max(match_result['matches'], key=lambda x: x['confidence'])
+                    if 'location' in best_match:
+                        x, y = best_match['location']
+                        h, w = best_match['template_size']
+                        detection_area = {
+                            'x': x, 'y': y, 'width': w, 'height': h,
+                            'match_count': match_result['match_count'],
+                            'strategy': 'all'
+                        }
                 
-                # NOUVEAU : Créer la zone de détection
-                if detection_success and 'location' in match_result:
-                    x, y = match_result['location']
-                    h, w = match_result['template_size']
-                    detection_area = {
-                        'x': x,
-                        'y': y,
-                        'width': w,
-                        'height': h
-                    }
+                else:  # Stratégies "best" ou "first"
+                    confidence = match_result['confidence']
+                    detection_success = confidence >= threshold
+                    matched_template = match_result.get('template_name', 'unknown')
+                    
+                    # Zone de détection
+                    if 'location' in match_result:
+                        x, y = match_result['location']
+                        h, w = match_result['template_size']
+                        detection_area = {
+                            'x': x, 'y': y, 'width': w, 'height': h,
+                            'template': matched_template,
+                            'scale': match_result.get('scale', 1.0)
+                        }
                 
                 log_debug(f"Template matching {alert['name']}: "
-                         f"confidence={confidence:.3f}, threshold={alert['threshold']}, "
-                         f"scale={match_result.get('scale', 1.0)}")
+                         f"confidence={confidence:.3f}, threshold={threshold}, "
+                         f"template={matched_template}")
             
             # Ajout à l'historique
             alert["history"].append(confidence)
 
-        # Méthode 2: Détection par OCR
+        # Méthode 2: Détection par OCR (inchangée)
         elif 'ocr' in alert:
             try:
                 # Prétraitement pour OCR
@@ -316,6 +465,7 @@ def check_for_alert(screenshot, alert, return_confidence=False, return_area=Fals
                 if target_text in found_text:
                     confidence = 1.0  # Pour OCR, on considère que c'est binaire
                     detection_success = True
+                    matched_template = "OCR"
                     
                     log_debug(f"OCR détection {alert['name']}: texte trouvé dans '{found_text.strip()}'")
                     
@@ -328,8 +478,7 @@ def check_for_alert(screenshot, alert, return_confidence=False, return_area=Fals
                     # Pour OCR, pas de zone précise, on peut créer une zone générale
                     if detection_success:
                         detection_area = {
-                            'x': 0,
-                            'y': 0,
+                            'x': 0, 'y': 0,
                             'width': screenshot.shape[1],
                             'height': screenshot.shape[0],
                             'type': 'ocr'
@@ -346,14 +495,15 @@ def check_for_alert(screenshot, alert, return_confidence=False, return_area=Fals
                 alert["history"].append(confidence)
         
         else:
-            log_error(f"Alerte {alert['name']} n'a pas de méthode de détection valide (img ou ocr)")
+            log_error(f"Alerte {alert['name']} n'a pas de méthode de détection valide (imgs/img ou ocr)")
             if return_area:
                 return (0.0, None) if return_confidence else (False, None)
             return 0.0 if return_confidence else False
 
-        # Statistiques de performance
+        # Statistiques de performance avec template utilisé
         duration_ms = (time.time() - start_time) * 1000
-        detection_stats.add_detection(detection_success, confidence, duration_ms)
+        detection_stats.add_detection(detection_success, confidence, duration_ms, 
+                                    alert.get('name'), matched_template)
         
         # Debug avancé si activé
         if alert.get("debug", False) or DEBUG_SAVE_SCREENSHOTS:
@@ -363,16 +513,35 @@ def check_for_alert(screenshot, alert, return_confidence=False, return_area=Fals
         if alert.get("debug", False) and DEBUG_SHOW_DETECTION_AREAS and detection_success and match_result:
             debug_screenshot = screenshot.copy()
             
-            if 'img' in alert and 'location' in match_result:
-                x, y = match_result['location']
-                h, w = match_result['template_size']
-                cv2.rectangle(debug_screenshot, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                
-                cv2.imshow(f"DEBUG: {alert['name']}", debug_screenshot)
-                cv2.waitKey(1)  # Non-bloquant
+            # Support d'affichage multi-correspondance
+            matches_to_show = []
+            if 'matches' in match_result:  # Stratégie "all"
+                matches_to_show = match_result['matches']
+            elif 'location' in match_result:  # Stratégies "best" ou "first"
+                matches_to_show = [match_result]
+            
+            for i, match in enumerate(matches_to_show):
+                if 'location' in match:
+                    x, y = match['location']
+                    h, w = match['template_size']
+                    
+                    # Couleur différente pour chaque correspondance
+                    colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255)]
+                    color = colors[i % len(colors)]
+                    
+                    cv2.rectangle(debug_screenshot, (x, y), (x + w, y + h), color, 2)
+                    
+                    # Nom du template
+                    template_name = match.get('template_name', f'Match {i+1}')
+                    cv2.putText(debug_screenshot, template_name, (x, y-10), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+            
+            cv2.imshow(f"DEBUG: {alert['name']}", debug_screenshot)
+            cv2.waitKey(1)  # Non-bloquant
         
         log_debug(f"Détection {alert['name']}: confidence={confidence:.3f}, "
-                 f"success={detection_success}, duration={duration_ms:.1f}ms")
+                 f"success={detection_success}, duration={duration_ms:.1f}ms, "
+                 f"template={matched_template}")
 
         # Retour selon les paramètres demandés
         if return_area:
@@ -407,42 +576,82 @@ def validate_detection_setup():
     except Exception as e:
         issues.append(f"Tesseract OCR non disponible: {e}")
     
-    # Vérification des templates
-    from config import ALERTS
+    # Vérification des templates (nouveau système)
+    from config import ALERTS, get_alert_images
+    total_templates = 0
+    
     for alert in ALERTS:
-        if 'img' in alert:
-            if not os.path.exists(alert['img']):
-                issues.append(f"Template manquant: {alert['img']} pour {alert['name']}")
-            else:
-                # Test de chargement
-                template = cv2.imread(alert['img'])
-                if template is None:
-                    issues.append(f"Template invalide: {alert['img']} pour {alert['name']}")
+        if 'imgs' in alert or 'img' in alert:
+            images = get_alert_images(alert)
+            total_templates += len(images)
+            
+            valid_images = 0
+            for img_path in images:
+                if not os.path.exists(img_path):
+                    issues.append(f"Template manquant: {img_path} pour {alert['name']}")
                 else:
-                    h, w = template.shape[:2]
-                    if h < 5 or w < 5:
-                        issues.append(f"Template trop petit ({w}x{h}): {alert['img']}")
+                    # Test de chargement
+                    template = cv2.imread(img_path)
+                    if template is None:
+                        issues.append(f"Template invalide: {img_path} pour {alert['name']}")
+                    else:
+                        valid_images += 1
+                        h, w = template.shape[:2]
+                        if h < 5 or w < 5:
+                            issues.append(f"Template trop petit ({w}x{h}): {img_path}")
+            
+            if valid_images == 0:
+                issues.append(f"Aucune image valide pour {alert['name']}")
+            elif valid_images < len(images):
+                log_warning(f"Seulement {valid_images}/{len(images)} images valides pour {alert['name']}")
     
     if issues:
         for issue in issues:
             log_warning(f"Validation détection: {issue}")
     else:
-        log_info("Configuration de détection validée")
+        log_info(f"Configuration de détection validée - {total_templates} templates chargés")
     
     return len(issues) == 0, issues
 
 
 def get_detection_statistics():
     """Retourne les statistiques de détection"""
-    return {
+    stats = {
         'total_detections': detection_stats.total_detections,
         'successful_detections': detection_stats.successful_detections,
         'success_rate': (detection_stats.successful_detections / detection_stats.total_detections * 100) if detection_stats.total_detections > 0 else 0,
         'average_detection_time': detection_stats.average_detection_time,
         'average_confidence': detection_stats.average_confidence,
         'templates_cached': len(detection_stats.template_cache),
-        'confidence_history': detection_stats.confidence_history[-100:]  # Dernières 100 détections
+        'confidence_history': detection_stats.confidence_history[-100:],  # Dernières 100 détections
+        'multi_image_stats': detection_stats.multi_image_stats  # NOUVEAU: Stats par image
     }
+    
+    return stats
+
+
+def get_multi_image_performance():
+    """NOUVEAU: Retourne les performances par image utilisée"""
+    performance = {}
+    
+    for alert_name, images_stats in detection_stats.multi_image_stats.items():
+        total_detections = sum(img_stats['detections'] for img_stats in images_stats.values())
+        
+        performance[alert_name] = {
+            'total_detections': total_detections,
+            'images_count': len(images_stats),
+            'images_performance': {}
+        }
+        
+        for img_name, img_stats in images_stats.items():
+            performance[alert_name]['images_performance'][img_name] = {
+                'detections': img_stats['detections'],
+                'percentage': (img_stats['detections'] / total_detections * 100) if total_detections > 0 else 0,
+                'avg_confidence': img_stats['avg_confidence'],
+                'max_confidence': img_stats['max_confidence']
+            }
+    
+    return performance
 
 
 def reset_detection_statistics():
@@ -475,15 +684,20 @@ def benchmark_detection_methods(screenshot, iterations=100):
             continue
             
         alert_name = alert['name']
-        method = 'template' if 'img' in alert else 'ocr' if 'ocr' in alert else 'unknown'
         
-        if method == 'unknown':
+        if 'imgs' in alert or 'img' in alert:
+            method = 'template_multi' if 'imgs' in alert else 'template_single'
+            images_count = len(get_alert_images(alert))
+        elif 'ocr' in alert:
+            method = 'ocr'
+            images_count = 0
+        else:
             continue
         
         times = []
         confidences = []
         
-        log_debug(f"Benchmark {alert_name} ({method})...")
+        log_debug(f"Benchmark {alert_name} ({method}, {images_count} images)...")
         
         for i in range(iterations):
             start_time = time.time()
@@ -504,6 +718,7 @@ def benchmark_detection_methods(screenshot, iterations=100):
         if times:
             results[alert_name] = {
                 'method': method,
+                'images_count': images_count,
                 'iterations': len(times),
                 'avg_time_ms': sum(times) / len(times),
                 'min_time_ms': min(times),
@@ -529,7 +744,7 @@ def optimize_detection_thresholds(screenshot, alerts, test_iterations=50):
     optimized_alerts = []
     
     for alert in alerts:
-        if not alert.get('enabled', True) or 'img' not in alert:
+        if not alert.get('enabled', True) or not ('imgs' in alert or 'img' in alert):
             optimized_alerts.append(alert)
             continue
         

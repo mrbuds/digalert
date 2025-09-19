@@ -1,17 +1,22 @@
 # -*- coding: utf-8 -*-
-import base64
-import re
+"""
+Module de capture intégré - Remplacement complet d'OBS
+Conserve l'interface existante pour une migration transparente
+"""
+
 import time
 import numpy as np
 import cv2
-from obswebsocket import requests
-import pygetwindow as gw
-import win32gui
 from utils import log_error, log_debug, log_warning, log_info, ensure_directory_exists
 from config import MAX_CAPTURE_TIME_MS, DEBUG_SAVE_SCREENSHOTS, DEBUG_SCREENSHOT_PATH
+from capture_direct import (
+    multi_capture, CaptureMethod, WindowCapture, 
+    capture_window_direct, initialize_direct_capture,
+    get_capture_statistics as get_direct_capture_statistics
+)
 
 class CaptureStats:
-    """Classe pour suivre les statistiques de capture"""
+    """Classe pour suivre les statistiques de capture (compatible avec l'ancienne version)"""
     def __init__(self):
         self.reset()
     
@@ -48,125 +53,165 @@ class CaptureStats:
             return 0
         return self.total_time_ms / self.successful_captures
 
-# Instance globale pour les statistiques
+# Instance globale pour compatibilité
 capture_stats = CaptureStats()
 
-def get_game_window_bbox(window_title, retry_count=3):
+# Variable pour suivre l'état d'initialisation
+DIRECT_CAPTURE_INITIALIZED = False
+
+
+def initialize_capture_system(source_windows):
     """
-    Récupère les coordonnées de la fenêtre de jeu
-    Avec système de retry amélioré
+    Initialise le système de capture directe
+    Remplace la connexion OBS
     """
-    for attempt in range(retry_count):
-        try:
-            windows = gw.getWindowsWithTitle(window_title)
-            if not windows:
-                if attempt == 0:  # Log seulement au premier essai
-                    log_debug(f"Fenêtre introuvable: {window_title} (tentative {attempt + 1}/{retry_count})")
-                
-                if attempt < retry_count - 1:
-                    time.sleep(0.5)  # Attente courte entre les tentatives
-                continue
-                
-            window = windows[0]
-            
-            # Vérification si la fenêtre est minimisée
-            if win32gui.IsIconic(window._hWnd):
-                log_debug(f"Fenêtre minimisée détectée: {window_title}")
-                try:
-                    # Tentative de récupération des coordonnées depuis le placement
-                    placement = win32gui.GetWindowPlacement(window._hWnd)
-                    if placement and len(placement) > 4:
-                        bbox = placement[4]  # RECT de la position normale
-                        log_debug(f"Coordonnées récupérées depuis placement: {bbox}")
-                        return validate_bbox(bbox, window_title)
-                except Exception as e:
-                    log_warning(f"Erreur récupération placement fenêtre {window_title}: {e}")
-            
-            # Fenêtre normale - récupération des coordonnées standard
-            bbox = (window.left, window.top, window.right, window.bottom)
-            log_debug(f"Coordonnées fenêtre {window_title}: {bbox}")
-            return validate_bbox(bbox, window_title)
-            
-        except Exception as e:
-            log_error(f"Erreur get_game_window_bbox (tentative {attempt + 1}): {e}")
-            if attempt < retry_count - 1:
-                time.sleep(1)
+    global DIRECT_CAPTURE_INITIALIZED
     
-    log_error(f"Impossible de récupérer les coordonnées de {window_title} après {retry_count} tentatives")
-    return None
-
-
-def validate_bbox(bbox, window_title):
-    """Valide et corrige les coordonnées de la fenêtre"""
-    if not bbox or len(bbox) != 4:
-        log_error(f"BBOX invalide pour {window_title}: {bbox}")
-        return None
+    log_info("🚀 Initialisation du système de capture directe (sans OBS)")
     
-    left, top, right, bottom = bbox
+    # Convertir la configuration SOURCE_WINDOWS vers le format attendu
+    windows_config = []
+    for window in source_windows:
+        windows_config.append({
+            'window_title': window.get('window_title'),
+            'source_name': window.get('source_name'),
+            'capture_method': window.get('capture_method', CaptureMethod.WIN32_PRINT_WINDOW),
+            'priority': window.get('priority', 1)
+        })
     
-    # Vérification des dimensions minimales
-    width = right - left
-    height = bottom - top
+    # Initialiser le système
+    success = initialize_direct_capture(windows_config)
     
-    if width <= 0 or height <= 0:
-        log_error(f"Dimensions invalides pour {window_title}: {width}x{height}")
-        return None
-    
-    # Vérification des dimensions trop petites (probablement une erreur)
-    if width < 100 or height < 100:
-        log_warning(f"Dimensions très petites pour {window_title}: {width}x{height}")
-        return None
-    
-    # Vérification des coordonnées négatives (fenêtre hors écran)
-    if left < -1000 or top < -1000:
-        log_warning(f"Fenêtre probablement hors écran {window_title}: ({left}, {top})")
-        # On peut quand même essayer de capturer
-    
-    log_debug(f"BBOX validée pour {window_title}: {bbox} ({width}x{height})")
-    return bbox
-
-
-def fix_base64_padding(data):
-    """Corrige le padding Base64 manquant"""
-    if not data:
-        return data
+    if success:
+        DIRECT_CAPTURE_INITIALIZED = True
+        log_info("✅ Système de capture directe initialisé avec succès")
+        log_info("🎯 Avantages: Capture des fenêtres cachées/minimisées activée")
         
-    pad = len(data) % 4
-    if pad > 0:
-        data += '=' * (4 - pad)
-    return data
+        # Afficher les méthodes de capture par fenêtre
+        for window in source_windows:
+            window_title = window.get('window_title')
+            info = multi_capture.get_window_info(window_title)
+            if info:
+                log_info(f"📋 {window.get('source_name')} ({window_title}):")
+                log_info(f"   Processus: {info['process_name']}")
+                log_info(f"   État: {'Minimisée' if info['is_minimized'] else 'Normale'}")
+                log_info(f"   ✅ Capture fenêtres cachées supportée")
+    else:
+        log_error("❌ Échec d'initialisation du système de capture directe")
+        log_error("💡 Vérifiez que les fenêtres cibles sont ouvertes")
+    
+    return success
 
 
-def save_debug_screenshot(image, source_name, success=True, error=None):
-    """Sauvegarde une capture pour debugging"""
-    if not DEBUG_SAVE_SCREENSHOTS or image is None:
-        return
+def capture_window(ws_dummy, source_name, window_title, timeout_ms=MAX_CAPTURE_TIME_MS):
+    """
+    Fonction de capture compatible avec l'interface OBS existante
+    
+    Args:
+        ws_dummy: Paramètre ignoré (compatibilité OBS)
+        source_name: Nom de la source (pour logs/debug)
+        window_title: Titre de la fenêtre à capturer
+        timeout_ms: Timeout de capture
+    
+    Returns:
+        numpy.ndarray: Image capturée ou None si échec
+    """
+    global DIRECT_CAPTURE_INITIALIZED
+    
+    start_time = time.time()
+    error_msg = None
     
     try:
-        ensure_directory_exists(DEBUG_SCREENSHOT_PATH)
+        # Vérifier l'initialisation
+        if not DIRECT_CAPTURE_INITIALIZED:
+            error_msg = "Système de capture non initialisé"
+            log_error(error_msg)
+            capture_stats.add_attempt(False, 0, error_msg)
+            return None
         
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        status = "success" if success else "failed"
-        filename = f"{source_name}_{timestamp}_{status}.png"
-        filepath = f"{DEBUG_SCREENSHOT_PATH}/{filename}"
+        log_debug(f"🎯 Capture directe: {source_name} ({window_title})")
         
-        cv2.imwrite(filepath, image)
-        log_debug(f"Screenshot debug sauvé: {filepath}")
+        # Ajouter la fenêtre si pas encore enregistrée
+        if window_title not in multi_capture.capturers:
+            multi_capture.add_window(window_title)
+            log_debug(f"Fenêtre ajoutée à la surveillance: {window_title}")
         
-        if error:
-            # Sauvegarde aussi les infos d'erreur
-            error_file = filepath.replace('.png', '_error.txt')
-            with open(error_file, 'w', encoding='utf-8') as f:
-                f.write(f"Erreur: {error}\n")
-                f.write(f"Timestamp: {timestamp}\n")
-                f.write(f"Source: {source_name}\n")
-                
+        # Capturer l'image
+        img = capture_window_direct(window_title)
+        
+        capture_time = (time.time() - start_time) * 1000
+        
+        if img is not None:
+            # Succès
+            capture_stats.add_attempt(True, capture_time)
+            
+            # Vérification de timeout
+            if capture_time > timeout_ms:
+                log_warning(f"Capture {source_name} lente: {capture_time:.1f}ms > {timeout_ms}ms")
+            
+            # Amélioration de la qualité (optionnel - déjà fait dans l'ancien code)
+            try:
+                img = enhance_image_quality(img)
+            except Exception as e:
+                log_debug(f"Erreur amélioration image: {e}")
+                # Continuer avec l'image non-améliorée
+            
+            log_debug(f"✅ Capture {source_name} réussie: {img.shape} en {capture_time:.1f}ms")
+            
+            # Sauvegarde debug si activée
+            save_debug_screenshot(img, source_name, True)
+            
+            return img
+        else:
+            # Échec de capture
+            error_msg = "Capture directe échouée"
+            capture_stats.add_attempt(False, capture_time, error_msg)
+            
+            # Diagnostics détaillés
+            capturer = multi_capture.capturers.get(window_title)
+            if capturer:
+                window_info = capturer.get_window_info()
+                if window_info:
+                    log_error(f"❌ Échec capture {source_name}:")
+                    log_error(f"   Fenêtre: {window_info['title']}")
+                    log_error(f"   Visible: {window_info['is_visible']}")
+                    log_error(f"   Minimisée: {window_info['is_minimized']}")
+                    log_error(f"   Taille: {window_info['width']}x{window_info['height']}")
+                    log_error(f"   Processus: {window_info['process_name']}")
+                    
+                    # Suggérer des solutions
+                    if window_info['width'] <= 0 or window_info['height'] <= 0:
+                        log_error("💡 Problème: Dimensions de fenêtre invalides")
+                    elif window_info['is_minimized']:
+                        log_info("📝 Note: Fenêtre minimisée - capture directe devrait fonctionner")
+                    
+                    # Afficher les stats de la méthode de capture
+                    stats = capturer.get_capture_statistics()
+                    last_method = stats.get('last_successful_method', 'aucune')
+                    log_debug(f"Dernière méthode réussie: {last_method}")
+                else:
+                    log_error(f"❌ Impossible d'obtenir les infos de fenêtre pour {window_title}")
+            else:
+                log_error(f"❌ Aucun capturer trouvé pour {window_title}")
+            
+            # Sauvegarde debug de l'erreur
+            save_debug_screenshot(None, source_name, False, error_msg)
+            
+            return None
+
     except Exception as e:
-        log_error(f"Erreur sauvegarde debug screenshot: {e}")
+        capture_time = (time.time() - start_time) * 1000
+        error_msg = f"Erreur capture_window ({source_name}): {e}"
+        log_error(error_msg)
+        
+        capture_stats.add_attempt(False, capture_time, error_msg)
+        save_debug_screenshot(None, source_name, False, error_msg)
+        
+        return None
 
 
 def enhance_image_quality(image):
-    """Améliore la qualité de l'image pour une meilleure détection"""
+    """Améliore la qualité de l'image pour une meilleure détection (conservé de l'ancienne version)"""
     if image is None:
         log_debug("Image None fournie à enhance_image_quality")
         return None
@@ -214,213 +259,43 @@ def enhance_image_quality(image):
         return image  # Retourner l'image originale en cas d'erreur
 
 
-def capture_window(ws, source_name, window_title, timeout_ms=MAX_CAPTURE_TIME_MS):
-    """
-    Capture une fenêtre via OBS WebSocket avec gestion d'erreurs améliorée
-    """
-    start_time = time.time()
-    error_msg = None
+def save_debug_screenshot(image, source_name, success=True, error=None):
+    """Sauvegarde une capture pour debugging (conservé de l'ancienne version)"""
+    if not DEBUG_SAVE_SCREENSHOTS:
+        return
     
     try:
-        # Étape 1: Récupération des coordonnées de la fenêtre
-        bbox = get_game_window_bbox(window_title)
-        if bbox is None:
-            error_msg = "Impossible de localiser la fenêtre"
-            capture_stats.add_attempt(False, 0, error_msg)
-            return None
-
-        width = bbox[2] - bbox[0]
-        height = bbox[3] - bbox[1]
+        ensure_directory_exists(DEBUG_SCREENSHOT_PATH)
         
-        log_debug(f"Capture {source_name}: {width}x{height}")
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        status = "success" if success else "failed"
+        filename = f"{source_name}_{timestamp}_{status}.png"
+        filepath = f"{DEBUG_SCREENSHOT_PATH}/{filename}"
         
-        # Étape 2: Vérification que la source existe dans OBS
-        try:
-            # Test d'existence de la source
-            source_list_response = ws.call(requests.GetSceneItemList(sceneName=None))
-            if hasattr(source_list_response, 'datain') and source_list_response.datain:
-                sources = source_list_response.datain.get('sceneItems', [])
-                source_names = [item.get('sourceName', '') for item in sources]
+        if image is not None:
+            cv2.imwrite(filepath, image)
+            log_debug(f"Screenshot debug sauvé: {filepath}")
+        
+        if error:
+            # Sauvegarde aussi les infos d'erreur
+            error_file = filepath.replace('.png', '_error.txt')
+            with open(error_file, 'w', encoding='utf-8') as f:
+                f.write(f"Erreur: {error}\n")
+                f.write(f"Timestamp: {timestamp}\n")
+                f.write(f"Source: {source_name}\n")
+                f.write(f"Mode: Capture directe (sans OBS)\n")
                 
-                if source_name not in source_names:
-                    log_warning(f"Source '{source_name}' non trouvée dans OBS. Sources disponibles: {source_names}")
-                    # Continuer quand même, peut-être dans une autre scène
-        except Exception as e:
-            log_debug(f"Impossible de vérifier la liste des sources: {e}")
-            # Continuer quand même
-        
-        # Étape 3: Requête à OBS
-        try:
-            log_debug(f"Requête screenshot pour '{source_name}' ({width}x{height})")
-            response = ws.call(requests.GetSourceScreenshot(
-                sourceName=source_name,
-                imageFormat="png",
-                imageWidth=width,
-                imageHeight=height
-            ))
-        except Exception as e:
-            error_msg = f"Erreur requête OBS: {str(e)}"
-            log_error(error_msg)
-            
-            # Diagnostic spécifique selon le type d'erreur
-            error_lower = str(e).lower()
-            if "source not found" in error_lower or "not found" in error_lower:
-                log_error(f"❌ Source '{source_name}' introuvable dans OBS")
-                log_error("💡 Vérifiez que:")
-                log_error("   1. La source existe dans OBS")
-                log_error("   2. Le nom de la source correspond exactement")
-                log_error("   3. La source est dans la scène active")
-            elif "connection" in error_lower or "timeout" in error_lower:
-                error_msg = "Connexion OBS perdue"
-            elif "invalid" in error_lower:
-                log_error(f"❌ Paramètres invalides pour '{source_name}'")
-                log_error(f"   Dimensions: {width}x{height}")
-            
-            capture_stats.add_attempt(False, (time.time() - start_time) * 1000, error_msg)
-            return None
-
-        # Étape 4: Validation de la réponse - DIAGNOSTIC DÉTAILLÉ
-        if not response:
-            error_msg = f"Réponse OBS nulle pour {source_name}"
-            log_error(error_msg)
-            capture_stats.add_attempt(False, (time.time() - start_time) * 1000, error_msg)
-            return None
-            
-        if not hasattr(response, 'datain'):
-            error_msg = f"Réponse OBS sans attribut 'datain' pour {source_name}"
-            log_error(error_msg)
-            log_debug(f"Type de réponse: {type(response)}")
-            log_debug(f"Attributs disponibles: {dir(response) if response else 'Aucun'}")
-            capture_stats.add_attempt(False, (time.time() - start_time) * 1000, error_msg)
-            return None
-            
-        if not response.datain:
-            error_msg = f"Réponse OBS avec datain vide pour {source_name}"
-            log_error(error_msg)
-            log_debug(f"response.datain = {response.datain}")
-            capture_stats.add_attempt(False, (time.time() - start_time) * 1000, error_msg)
-            return None
-
-        # Diagnostic du contenu de datain
-        datain_keys = list(response.datain.keys()) if isinstance(response.datain, dict) else []
-        log_debug(f"Clés dans response.datain: {datain_keys}")
-        
-        if "imageData" not in response.datain:
-            error_msg = f"Données image manquantes dans la réponse OBS pour {source_name}"
-            log_error(error_msg)
-            log_error(f"Clés disponibles dans la réponse: {datain_keys}")
-            
-            # Diagnostics supplémentaires
-            if "error" in response.datain:
-                log_error(f"Erreur OBS: {response.datain['error']}")
-            if "status" in response.datain:
-                log_error(f"Statut OBS: {response.datain['status']}")
-                
-            capture_stats.add_attempt(False, (time.time() - start_time) * 1000, error_msg)
-            return None
-
-        # Étape 5: Décodage des données image
-        img_data = response.datain["imageData"]
-        
-        if not img_data:
-            error_msg = f"Données Base64 vides pour {source_name}"
-            log_error(error_msg)
-            log_error("💡 Causes possibles:")
-            log_error("   1. La source est masquée ou invisible")
-            log_error("   2. La fenêtre n'est pas capturée par OBS")
-            log_error("   3. Problème de permissions")
-            capture_stats.add_attempt(False, (time.time() - start_time) * 1000, error_msg)
-            return None
-        
-        # Informations sur la taille des données
-        log_debug(f"Données image reçues: {len(img_data)} caractères")
-        
-        # Nettoyage du préfixe Base64
-        original_length = len(img_data)
-        img_data = re.sub(r'^data:image/.+;base64,', '', img_data)
-        img_data = fix_base64_padding(img_data)
-        
-        log_debug(f"Après nettoyage: {len(img_data)} caractères (supprimé: {original_length - len(img_data)})")
-
-        # Étape 6: Décodage Base64 et création de l'image
-        try:
-            img_bytes = base64.b64decode(img_data)
-            log_debug(f"Bytes décodés: {len(img_bytes)}")
-            
-            nparr = np.frombuffer(img_bytes, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        except Exception as e:
-            error_msg = f"Erreur décodage image {source_name}: {e}"
-            log_error(error_msg)
-            log_error("💡 Vérifiez que les données Base64 sont valides")
-            capture_stats.add_attempt(False, (time.time() - start_time) * 1000, error_msg)
-            return None
-
-        if img is None:
-            error_msg = f"Décodage image échoué pour {source_name}"
-            log_error(error_msg)
-            log_error("💡 L'image reçue n'est pas dans un format valide")
-            capture_stats.add_attempt(False, (time.time() - start_time) * 1000, error_msg)
-            return None
-
-        # Étape 7: Validation et diagnostic de l'image
-        if img.size == 0:
-            error_msg = f"Image vide pour {source_name}"
-            log_error(error_msg)
-            capture_stats.add_attempt(False, (time.time() - start_time) * 1000, error_msg)
-            return None
-
-        # Diagnostic d'écran noir
-        img_mean = np.mean(img)
-        if img_mean < 5:  # Pixels très sombres
-            log_warning(f"⚫ Écran noir détecté pour {source_name} (moyenne: {img_mean:.1f})")
-            log_warning("💡 Causes possibles:")
-            log_warning("   1. La fenêtre est minimisée ou masquée")
-            log_warning("   2. Le jeu affiche un écran noir")
-            log_warning("   3. Problème de capture de la source OBS")
-            log_warning("   4. La source pointe vers une mauvaise fenêtre")
-            # Continuer quand même avec l'image noire pour debug
-        elif img_mean < 50:
-            log_debug(f"Image très sombre pour {source_name} (moyenne: {img_mean:.1f})")
-
-        # Étape 8: Amélioration de la qualité (avec protection)
-        try:
-            img = enhance_image_quality(img)
-        except Exception as e:
-            log_error(f"Erreur dans enhance_image_quality: {e}")
-            # Continuer avec l'image non-améliorée
-        
-        # Étape 9: Calcul des statistiques
-        duration_ms = (time.time() - start_time) * 1000
-        capture_stats.add_attempt(True, duration_ms)
-        
-        # Vérification du timeout
-        if duration_ms > timeout_ms:
-            log_warning(f"Capture {source_name} lente: {duration_ms:.1f}ms > {timeout_ms}ms")
-        
-        log_debug(f"✅ Capture {source_name} réussie: {img.shape} en {duration_ms:.1f}ms")
-        
-        # Sauvegarde debug si activée
-        save_debug_screenshot(img, source_name, True)
-        
-        return img
-
     except Exception as e:
-        duration_ms = (time.time() - start_time) * 1000
-        error_msg = f"Erreur capture_window ({source_name}): {e}"
-        log_error(error_msg)
-        
-        capture_stats.add_attempt(False, duration_ms, error_msg)
-        
-        # Sauvegarde debug de l'erreur
-        save_debug_screenshot(None, source_name, False, error_msg)
-        
-        return None
+        log_error(f"Erreur sauvegarde debug screenshot: {e}")
 
 
 def get_capture_statistics():
-    """Retourne les statistiques de capture"""
+    """Retourne les statistiques de capture (compatible avec l'ancienne interface)"""
+    # Combiner les anciennes stats avec les nouvelles
+    direct_stats = get_direct_capture_statistics()
+    
     return {
+        # Compatibilité ancienne interface
         'total_attempts': capture_stats.total_attempts,
         'successful_captures': capture_stats.successful_captures,
         'failed_captures': capture_stats.failed_captures,
@@ -428,29 +303,47 @@ def get_capture_statistics():
         'average_time_ms': capture_stats.average_time_ms,
         'min_time_ms': capture_stats.min_time_ms if capture_stats.min_time_ms != float('inf') else 0,
         'max_time_ms': capture_stats.max_time_ms,
-        'last_error': capture_stats.last_error
+        'last_error': capture_stats.last_error,
+        
+        # Nouvelles statistiques détaillées
+        'direct_capture_stats': direct_stats,
+        'capture_mode': 'direct_capture',
+        'obs_required': False,
+        'hidden_window_support': True
     }
 
 
 def reset_capture_statistics():
     """Remet à zéro les statistiques de capture"""
     capture_stats.reset()
+    
+    # Reset aussi les stats du système direct
+    for capturer in multi_capture.capturers.values():
+        capturer.capture_stats = {
+            'total_attempts': 0,
+            'successful_captures': 0,
+            'method_stats': {},
+            'last_error': None
+        }
+    
     log_debug("Statistiques de capture remises à zéro")
 
 
-def test_capture_performance(ws, source_name, window_title, iterations=10):
+def test_capture_performance(source_name, window_title, iterations=10):
     """
-    Test de performance de capture
-    Utile pour diagnostiquer les problèmes
+    Test de performance de capture (compatible avec l'ancienne interface)
     """
-    log_info(f"Test de performance capture pour {source_name} ({iterations} itérations)")
+    log_info(f"Test de performance capture directe pour {source_name} ({iterations} itérations)")
+    
+    if window_title not in multi_capture.capturers:
+        multi_capture.add_window(window_title)
     
     results = []
     success_count = 0
     
     for i in range(iterations):
         start_time = time.time()
-        img = capture_window(ws, source_name, window_title)
+        img = capture_window(None, source_name, window_title)  # ws_dummy = None
         duration = (time.time() - start_time) * 1000
         
         success = img is not None
@@ -467,21 +360,198 @@ def test_capture_performance(ws, source_name, window_title, iterations=10):
         log_debug(f"Test {i+1}/{iterations}: {'OK' if success else 'FAIL'} ({duration:.1f}ms)")
         time.sleep(0.5)  # Pause entre les tests
     
-    # Calcul des statistiques
+    # Calculer les statistiques
     durations = [r['duration_ms'] for r in results if r['success']]
     
     stats = {
         'source_name': source_name,
+        'window_title': window_title,
         'total_iterations': iterations,
         'successful_captures': success_count,
         'success_rate': (success_count / iterations) * 100,
         'average_duration_ms': sum(durations) / len(durations) if durations else 0,
         'min_duration_ms': min(durations) if durations else 0,
         'max_duration_ms': max(durations) if durations else 0,
-        'results': results
+        'results': results,
+        'capture_mode': 'direct_capture'
     }
     
     log_info(f"Test terminé - Succès: {success_count}/{iterations} ({stats['success_rate']:.1f}%), "
              f"Temps moyen: {stats['average_duration_ms']:.1f}ms")
     
     return stats
+
+
+def get_window_capture_info(window_title):
+    """
+    NOUVEAU: Récupère les informations détaillées d'une fenêtre
+    """
+    return multi_capture.get_window_info(window_title)
+
+
+def optimize_capture_method(source_name, window_title, test_iterations=5):
+    """
+    NOUVEAU: Optimise automatiquement la méthode de capture pour une fenêtre
+    """
+    log_info(f"🎯 Optimisation méthode de capture pour {source_name}")
+    
+    if window_title not in multi_capture.capturers:
+        multi_capture.add_window(window_title)
+    
+    capturer = multi_capture.capturers[window_title]
+    
+    # Test de toutes les méthodes
+    from capture_direct import benchmark_capture_methods
+    results = benchmark_capture_methods(window_title, test_iterations)
+    
+    if results:
+        # Trouver la meilleure méthode
+        best_method = max(results.items(), 
+                         key=lambda x: (x[1]['success_rate'], -x[1]['avg_time_ms']))
+        
+        # Appliquer la meilleure méthode
+        capturer.preferred_method = best_method[0]
+        
+        log_info(f"✅ Méthode optimisée pour {source_name}: {best_method[0]}")
+        log_info(f"   Taux de succès: {best_method[1]['success_rate']:.1f}%")
+        log_info(f"   Temps moyen: {best_method[1]['avg_time_ms']:.1f}ms")
+        
+        return best_method[0]
+    
+    return None
+
+
+def switch_capture_method(window_title, method):
+    """
+    NOUVEAU: Change la méthode de capture pour une fenêtre spécifique
+    """
+    if window_title in multi_capture.capturers:
+        multi_capture.capturers[window_title].preferred_method = method
+        log_info(f"Méthode de capture changée pour {window_title}: {method}")
+        return True
+    
+    return False
+
+
+def get_available_windows():
+    """
+    NOUVEAU: Liste toutes les fenêtres disponibles pour capture
+    """
+    import win32gui
+    
+    def enum_window_callback(hwnd, results):
+        if win32gui.IsWindowVisible(hwnd):
+            window_text = win32gui.GetWindowText(hwnd)
+            if window_text:  # Ignorer les fenêtres sans titre
+                results.append({
+                    'hwnd': hwnd,
+                    'title': window_text,
+                    'class_name': win32gui.GetClassName(hwnd)
+                })
+        return True
+    
+    results = []
+    win32gui.EnumWindows(enum_window_callback, results)
+    
+    # Filtrer et trier
+    filtered_results = []
+    for window in results:
+        title = window['title']
+        # Exclure les fenêtres système communes
+        if not any(skip in title.lower() for skip in ['program manager', 'task switching', 'cortana']):
+            filtered_results.append(window)
+    
+    return sorted(filtered_results, key=lambda x: x['title'])
+
+
+# Fonctions de compatibilité pour l'interface OBS
+def validate_obs_connection():
+    """Fonction de compatibilité - vérifie l'état du système de capture directe"""
+    return DIRECT_CAPTURE_INITIALIZED
+
+
+def is_obs_connected():
+    """Fonction de compatibilité - retourne l'état d'initialisation"""
+    return DIRECT_CAPTURE_INITIALIZED
+
+
+def reconnect_obs():
+    """Fonction de compatibilité - réinitialise le système de capture"""
+    global DIRECT_CAPTURE_INITIALIZED
+    
+    log_info("🔄 Réinitialisation du système de capture directe...")
+    
+    # Réinitialiser les capteurs
+    for capturer in multi_capture.capturers.values():
+        capturer.hwnd = None  # Force la recherche de fenêtre
+    
+    DIRECT_CAPTURE_INITIALIZED = True
+    log_info("✅ Système de capture directe réinitialisé")
+    return True
+
+
+def cleanup_capture_system():
+    """Nettoie le système de capture"""
+    global DIRECT_CAPTURE_INITIALIZED
+    
+    log_info("🧹 Nettoyage du système de capture directe")
+    
+    # Nettoyer les capteurs
+    multi_capture.capturers.clear()
+    multi_capture.global_stats = {
+        'total_windows': 0,
+        'active_windows': 0,
+        'total_captures': 0,
+        'successful_captures': 0
+    }
+    
+    DIRECT_CAPTURE_INITIALIZED = False
+    log_info("✅ Système de capture nettoyé")
+
+
+if __name__ == "__main__":
+    # Test du système intégré
+    print("🧪 Test du système de capture intégré")
+    
+    # Configuration de test
+    test_windows = [
+        {
+            'source_name': 'test_notepad',
+            'window_title': 'Notepad',
+            'notification_cooldown': 30,
+            'priority': 1
+        },
+        {
+            'source_name': 'test_calc',
+            'window_title': 'Calculator',
+            'notification_cooldown': 30,
+            'priority': 2
+        }
+    ]
+    
+    # Initialiser
+    if initialize_capture_system(test_windows):
+        print("✅ Système initialisé")
+        
+        # Tester les captures
+        for window in test_windows:
+            source_name = window['source_name']
+            window_title = window['window_title']
+            
+            print(f"\n🎯 Test capture: {source_name}")
+            
+            img = capture_window(None, source_name, window_title)
+            if img is not None:
+                print(f"   ✅ Succès: {img.shape}")
+            else:
+                print(f"   ❌ Échec")
+        
+        # Afficher les statistiques
+        stats = get_capture_statistics()
+        print(f"\n📊 Statistiques:")
+        print(f"   Tentatives: {stats['total_attempts']}")
+        print(f"   Succès: {stats['successful_captures']}")
+        print(f"   Taux: {stats['success_rate']:.1f}%")
+        
+    else:
+        print("❌ Échec d'initialisation")

@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-from obswebsocket import obsws
+"""
+Main.py modifié pour utiliser la capture directe au lieu d'OBS
+Compatible avec les fenêtres cachées et minimisées
+"""
+
 from win10toast import ToastNotifier
 import time
 import threading
@@ -8,8 +12,11 @@ from queue import Queue
 from collections import defaultdict
 import json
 
-from config import ALERTS, COOLDOWN_PERIOD, CHECK_INTERVAL, OBS_WS_HOST, OBS_WS_PASSWORD, OBS_WS_PORT, WINDOW_RETRY_INTERVAL, SOURCE_WINDOWS
-from capture import capture_window
+from config import ALERTS, COOLDOWN_PERIOD, CHECK_INTERVAL, WINDOW_RETRY_INTERVAL, SOURCE_WINDOWS
+from capture import (
+    capture_window, initialize_capture_system, is_obs_connected, 
+    reconnect_obs, cleanup_capture_system, get_capture_statistics
+)
 from detection import check_for_alert, cleanup_template_cache_if_needed
 from webapp import (init_webapp, start_webapp, update_webapp_data, add_webapp_alert, 
                    stop_webapp, update_webapp_screenshot, register_pause_callback, 
@@ -122,45 +129,87 @@ class NotificationQueue:
         self.active = False
 
 
-class OBSManager:
+class CaptureSystemManager:
+    """
+    Gestionnaire du système de capture directe
+    Remplace l'OBSManager pour une interface compatible
+    """
     def __init__(self):
-        self.ws = None
         self.connected = False
+        self.reconnection_attempts = 0
+        self.max_reconnection_attempts = 5
         
     def connect(self, max_retries=3):
+        """Initialise le système de capture directe"""
         for attempt in range(max_retries):
             try:
-                if self.ws:
-                    self.disconnect()
+                log_info(f"🔌 Initialisation système de capture (tentative {attempt + 1}/{max_retries})")
+                
+                # Initialiser le système de capture directe
+                success = initialize_capture_system(SOURCE_WINDOWS)
+                
+                if success:
+                    self.connected = True
+                    self.reconnection_attempts = 0
+                    log_info("✅ Système de capture directe initialisé")
+                    log_info("🎯 Fonctionnalités activées:")
+                    log_info("   • Capture de fenêtres minimisées/cachées")
+                    log_info("   • Pas de dépendance OBS")
+                    log_info("   • Méthodes de capture multiples avec fallback")
+                    return True
+                else:
+                    log_error(f"❌ Échec initialisation système capture (tentative {attempt + 1})")
+                    time.sleep(2)
                     
-                self.ws = obsws(OBS_WS_HOST, OBS_WS_PORT, OBS_WS_PASSWORD)
-                self.ws.connect()
-                self.connected = True
-                log_info("Connexion OBS établie")
-                return True
             except Exception as e:
-                log_error(f"Tentative connexion OBS {attempt + 1}/{max_retries}: {e}")
+                log_error(f"Erreur initialisation capture (tentative {attempt + 1}/{max_retries}): {e}")
                 time.sleep(2)
                 
+        log_error("❌ Impossible d'initialiser le système de capture après toutes les tentatives")
         return False
         
     def disconnect(self):
-        if self.ws:
+        """Nettoie le système de capture"""
+        if self.connected:
             try:
-                self.ws.disconnect()
-                log_info("Déconnexion OBS réussie")
-            except:
-                pass
+                cleanup_capture_system()
+                log_info("✅ Système de capture nettoyé")
+            except Exception as e:
+                log_error(f"Erreur nettoyage système capture: {e}")
             finally:
                 self.connected = False
                 
     def is_connected(self):
-        return self.connected and self.ws
+        """Vérifie l'état de connexion"""
+        if self.connected:
+            # Vérification périodique de l'état
+            return is_obs_connected()  # Fonction de compatibilité
+        return False
+    
+    def reconnect(self):
+        """Tente une reconnexion"""
+        if self.reconnection_attempts >= self.max_reconnection_attempts:
+            log_error(f"❌ Trop de tentatives de reconnexion ({self.reconnection_attempts})")
+            return False
+        
+        self.reconnection_attempts += 1
+        log_info(f"🔄 Reconnexion système capture (tentative {self.reconnection_attempts})")
+        
+        self.disconnect()
+        time.sleep(1)
+        
+        success = self.connect(max_retries=2)
+        if success:
+            log_info("✅ Reconnexion système capture réussie")
+        else:
+            log_error("❌ Échec reconnexion système capture")
+        
+        return success
 
 
 def main():
     notification_queue = NotificationQueue()
-    obs_manager = OBSManager()
+    capture_manager = CaptureSystemManager()  # Remplace OBSManager
 
     # État par fenêtre avec statistiques étendues
     windows_state = {}
@@ -182,17 +231,20 @@ def main():
             "error_count": 0,
             "performance_ms": 0,
             "notification_cooldown": win.get("notification_cooldown", COOLDOWN_PERIOD),
-            "last_black_screen_notification": 0
+            "last_black_screen_notification": 0,
+            "window_title": win.get("window_title"),  # NOUVEAU: Garder référence titre fenêtre
+            "capture_method": win.get("capture_method", "auto")  # NOUVEAU: Méthode de capture
         }
 
     # Statistiques globales
     global_stats = {
         "start_time": time.time(),
         "total_cycles": 0,
-        "obs_reconnections": 0,
+        "capture_reconnections": 0,  # Remplace obs_reconnections
         "last_status_save": 0,
         "pause_count": 0,
-        "total_paused_time": 0
+        "total_paused_time": 0,
+        "capture_mode": "direct_capture"  # NOUVEAU: Mode de capture
     }
 
     pause_start_time = None
@@ -207,15 +259,42 @@ def main():
         start_webapp()
         log_info("🌐 Interface web disponible sur http://localhost:5000")
         
-        # Connexion initiale OBS
-        if not obs_manager.connect():
-            log_error("Impossible de se connecter à OBS. Arrêt du programme.")
+        # Initialisation système de capture directe (remplace OBS)
+        if not capture_manager.connect():
+            log_error("❌ Impossible d'initialiser le système de capture. Arrêt du programme.")
+            log_error("💡 Vérifiez que les fenêtres cibles sont ouvertes:")
+            for win in SOURCE_WINDOWS:
+                log_error(f"   - {win['window_title']} (source: {win['source_name']})")
             return
 
         log_info("=== Démarrage du système de détection d'alertes ===")
+        log_info("🚀 Mode: Capture directe (sans OBS)")
         log_info("💡 Contrôles disponibles:")
         log_info("   - Interface web: bouton pause/reprise")
         log_info("   - Raccourci web: ESPACE ou P")
+        
+        # Afficher les infos des fenêtres détectées
+        from capture import get_window_capture_info
+        log_info("\n📋 Fenêtres détectées:")
+        for win in SOURCE_WINDOWS:
+            window_info = get_window_capture_info(win['window_title'])
+            if window_info:
+                status_icons = []
+                if window_info['is_minimized']:
+                    status_icons.append("📦 Minimisée")
+                if not window_info['is_visible']:
+                    status_icons.append("👁️‍🗨️ Cachée")
+                if window_info['can_capture_hidden']:
+                    status_icons.append("✅ Capture OK")
+                
+                status_text = " | ".join(status_icons) if status_icons else "Normal"
+                
+                log_info(f"   🎯 {win['source_name']} ({win['window_title']})")
+                log_info(f"      Taille: {window_info['width']}x{window_info['height']}")
+                log_info(f"      Processus: {window_info['process_name']}")
+                log_info(f"      État: {status_text}")
+            else:
+                log_info(f"   ❌ {win['source_name']} ({win['window_title']}) - Non trouvée")
         
         while True:
             try:
@@ -230,7 +309,7 @@ def main():
                         global_stats["pause_count"] += 1
                         log_info("⏸️ Système en pause - En attente de reprise...")
                     
-                    # Pendant la pause, maintenir la connexion et l'interface web
+                    # Pendant la pause, maintenir l'interface web
                     update_webapp_data(windows_state, global_stats)
                     time.sleep(1)
                     continue
@@ -246,13 +325,14 @@ def main():
                 if global_stats["total_cycles"] % 100 == 0:
                     cleanup_template_cache_if_needed()
 
-                # Vérification connexion OBS
-                if not obs_manager.is_connected():
-                    log_error("Connexion OBS perdue, tentative de reconnexion...")
-                    if obs_manager.connect():
-                        global_stats["obs_reconnections"] += 1
+                # Vérification système de capture
+                if not capture_manager.is_connected():
+                    log_error("❌ Système de capture déconnecté, tentative de reconnexion...")
+                    if capture_manager.reconnect():
+                        global_stats["capture_reconnections"] += 1
+                        log_info("✅ Reconnexion système capture réussie")
                     else:
-                        log_error("Échec reconnexion OBS, attente...")
+                        log_error("❌ Échec reconnexion système capture, attente...")
                         time.sleep(WINDOW_RETRY_INTERVAL)
                         continue
 
@@ -265,7 +345,8 @@ def main():
                     state["total_captures"] += 1
 
                     try:
-                        screenshot = capture_window(obs_manager.ws, source_name, window_title)
+                        # NOUVEAU: Capture directe (sans paramètre ws)
+                        screenshot = capture_window(None, source_name, window_title)
                         capture_time = (time.time() - capture_start) * 1000
                         state["performance_ms"] = capture_time
 
@@ -275,22 +356,43 @@ def main():
                             state["error_count"] += 1
                             log_debug(f"Capture échouée pour {source_name} (échecs consécutifs: {state['consecutive_failures']})")
                             
+                            # AMÉLIORATION: Diagnostic spécifique pour capture directe
+                            if state["consecutive_failures"] == 1:
+                                window_info = get_window_capture_info(window_title)
+                                if window_info:
+                                    log_debug(f"État fenêtre {source_name}:")
+                                    log_debug(f"   Visible: {window_info['is_visible']}")
+                                    log_debug(f"   Minimisée: {window_info['is_minimized']}")
+                                    log_debug(f"   Taille: {window_info['width']}x{window_info['height']}")
+                                else:
+                                    log_debug(f"Impossible d'obtenir infos fenêtre: {window_title}")
+                            
                             if state["consecutive_failures"] >= 5:
                                 log_error(f"Trop d'échecs pour {source_name}, pause longue")
+                                
+                                # NOUVEAU: Tentative d'optimisation automatique
+                                if state["consecutive_failures"] == 5:
+                                    log_info(f"🔧 Tentative d'optimisation capture pour {source_name}")
+                                    from capture import optimize_capture_method
+                                    new_method = optimize_capture_method(source_name, window_title)
+                                    if new_method:
+                                        state["capture_method"] = new_method
+                                        log_info(f"✅ Méthode optimisée: {new_method}")
+                                
                                 time.sleep(WINDOW_RETRY_INTERVAL)
                             continue
 
                         # Toujours sauvegarder le dernier screenshot
                         update_webapp_screenshot(source_name, screenshot, False, None)
 
-                        # Vérification d'écran noir
+                        # Vérification d'écran noir (améliorée pour capture directe)
                         if is_black_screen(screenshot):
                             current_black_screen_time = current_time
                             last_black_screen_notification = state.get("last_black_screen_notification", 0)
                             
                             if current_black_screen_time - last_black_screen_notification > 60:
                                 black_screen_title = f"⚫ Écran Noir - {source_name}"
-                                black_screen_message = f"Écran noir détecté sur {source_name}. Vérifiez la capture OBS."
+                                black_screen_message = f"Écran noir détecté sur {source_name}. La fenêtre est peut-être fermée ou masquée."
                                 
                                 if notification_queue.add_notification(black_screen_title, black_screen_message, 8):
                                     state["last_black_screen_notification"] = current_black_screen_time
@@ -299,6 +401,7 @@ def main():
                             state["consecutive_failures"] += 1
                             state["last_error"] = f"Écran noir détecté"
                         else:
+                            # Reset des erreurs d'écran noir
                             last_error = state.get("last_error")
                             if last_error and "écran noir" in last_error.lower():
                                 state["consecutive_failures"] = 0
@@ -307,7 +410,7 @@ def main():
                         state["successful_captures"] += 1
                         state["last_error"] = None
 
-                        # Détection d'alertes avec zone de détection
+                        # Détection d'alertes avec zone de détection (inchangé)
                         alert_detected = False
                         current_alert = None
                         max_confidence = 0.0
@@ -384,7 +487,7 @@ def main():
                 # Mise à jour interface web
                 update_webapp_data(windows_state, global_stats)
                 
-                # Affichage console simplifié
+                # Affichage console simplifié avec informations capture directe
                 if global_stats["total_cycles"] % 10 == 0:
                     cycle_duration = time.time() - cycle_start
                     active_sources = sum(1 for state in windows_state.values() 
@@ -393,14 +496,17 @@ def main():
                                          for state in windows_state.values())
                     
                     pause_status = " [PAUSE]" if is_system_paused() else ""
-                    pause_info = ""
+                    capture_mode = " [DIRECT]"  # Indicateur mode direct
+                    
                     if global_stats["pause_count"] > 0:
                         pause_info = f" (Pauses: {global_stats['pause_count']}, Temps pause: {global_stats['total_paused_time']:.1f}s)"
+                    else:
+                        pause_info = ""
                     
                     log_info(f"📊 Cycle {global_stats['total_cycles']}: "
                            f"{active_sources}/{len(windows_state)} sources actives, "
                            f"{total_detections} détections, "
-                           f"{cycle_duration:.2f}s{pause_status}{pause_info}")
+                           f"{cycle_duration:.2f}s{capture_mode}{pause_status}{pause_info}")
                 
                 # Sauvegarde périodique
                 if current_time - global_stats["last_status_save"] > 300:
@@ -432,23 +538,33 @@ def main():
             global_stats["total_paused_time"] += final_pause_duration
         
         notification_queue.stop()
-        obs_manager.disconnect()
+        capture_manager.disconnect()  # Remplace obs_manager.disconnect()
         stop_webapp()
         save_statistics(windows_state, global_stats)
         
-        # Affichage des statistiques finales
+        # Affichage des statistiques finales avec infos capture directe
         total_uptime = time.time() - global_stats["start_time"]
         active_time = total_uptime - global_stats["total_paused_time"]
         pause_percentage = (global_stats["total_paused_time"] / total_uptime) * 100 if total_uptime > 0 else 0
         
+        # Statistiques de capture
+        capture_stats = get_capture_statistics()
+        
         log_info("=== Statistiques finales ===")
+        log_info(f"Mode de capture: {global_stats['capture_mode']}")
         log_info(f"Temps total: {total_uptime:.1f}s")
         log_info(f"Temps actif: {active_time:.1f}s")
         log_info(f"Temps en pause: {global_stats['total_paused_time']:.1f}s ({pause_percentage:.1f}%)")
         log_info(f"Nombre de pauses: {global_stats['pause_count']}")
+        log_info(f"Reconnexions capture: {global_stats['capture_reconnections']}")
+        log_info(f"Captures réussies: {capture_stats['successful_captures']}/{capture_stats['total_attempts']} ({capture_stats['success_rate']:.1f}%)")
+        if capture_stats.get('direct_capture_stats'):
+            hidden_support = capture_stats['direct_capture_stats'].get('hidden_window_support', False)
+            log_info(f"Support fenêtres cachées: {'✅ Oui' if hidden_support else '❌ Non'}")
         log_info("=== Arrêt du système ===")
         
         print("\n🎮 Last War Alerts arrêté")
+        print("✅ Mode capture directe - Aucune dépendance OBS")
         print("Interface web fermée")
         input("Appuyez sur Entrée pour quitter...")
 
@@ -460,7 +576,8 @@ def save_statistics(windows_state, global_stats):
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "global_stats": {},
             "windows_state": {},
-            "system_paused": is_system_paused()
+            "system_paused": is_system_paused(),
+            "capture_mode": "direct_capture"  # NOUVEAU
         }
         
         # Nettoyage des stats globales
@@ -490,6 +607,13 @@ def save_statistics(windows_state, global_stats):
                     clean_state[key] = str(value)
             
             stats_data["windows_state"][source] = clean_state
+        
+        # NOUVEAU: Ajouter les statistiques de capture directe
+        try:
+            capture_stats = get_capture_statistics()
+            stats_data["capture_statistics"] = capture_stats
+        except Exception as e:
+            log_debug(f"Erreur ajout stats capture: {e}")
         
         with open("alert_statistics.json", "w", encoding="utf-8") as f:
             json.dump(stats_data, f, indent=2, ensure_ascii=False)

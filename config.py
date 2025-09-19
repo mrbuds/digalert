@@ -33,10 +33,11 @@ MAX_CAPTURE_TIME_MS = 5000  # Timeout de capture
 MAX_CONSECUTIVE_FAILURES = 10  # Échecs avant pause longue
 STATISTICS_SAVE_INTERVAL = 300  # Sauvegarde toutes les 5 minutes
 
-# Configuration des alertes avec paramètres étendus
+# Configuration des alertes avec support multi-images
 ALERTS = [
     {
-        "img": "DIG.png",
+        # NOUVEAU: Support multi-images - peut être une liste
+        "imgs": ["DIG.png", "DIG_v2.png"],  # Plusieurs variantes de l'image DIG
         "name": "Dig!",
         "threshold": 0.7,
         "debug": False,
@@ -45,8 +46,10 @@ ALERTS = [
         "color": "\033[92m",  # Vert
         "sound_file": None,  # Optionnel: fichier son
         "min_area": 100,  # Aire minimale de détection
+        "match_strategy": "best",  # "best", "first", "all" - stratégie de correspondance
     },
     {
+        # Format classique avec une seule image (rétrocompatibilité)
         "img": "egg.png", 
         "name": "EGGGGGG!",
         "threshold": 0.8,
@@ -57,10 +60,24 @@ ALERTS = [
         "sound_file": None,
         "min_area": 150,
     },
-    # Alertes OCR désactivées mais prêtes à l'emploi
+    {
+        # Exemple avec plusieurs images pour différentes résolutions
+        "imgs": ["titanium_1080p.png", "titanium_1440p.png", "titanium_4k.png"],
+        "name": "TITANIUM!",
+        "threshold": 0.75,
+        "debug": False,
+        "history": deque(maxlen=HISTORY_LEN),
+        "priority": "medium",
+        "color": "\033[94m",  # Bleu
+        "sound_file": None,
+        "min_area": 120,
+        "match_strategy": "first",  # Arrêter à la première correspondance
+        "enabled": False,  # Désactivée par défaut
+    },
+    # Alertes OCR inchangées
     {
         "ocr": "alliage",
-        "name": "TITANIUM!",
+        "name": "ALLIAGE DÉTECTÉ!",
         "threshold": 0.8,
         "debug": False,
         "history": deque(maxlen=HISTORY_LEN),
@@ -195,28 +212,83 @@ ERROR_RECOVERY = {
 }
 
 
+def get_alert_images(alert):
+    """Retourne la liste des images pour une alerte (nouveau format ou ancien)"""
+    images = []
+    
+    # Nouveau format : liste d'images
+    if "imgs" in alert:
+        if isinstance(alert["imgs"], list):
+            images.extend(alert["imgs"])
+        else:
+            images.append(alert["imgs"])
+    
+    # Ancien format : image unique (rétrocompatibilité)
+    elif "img" in alert:
+        images.append(alert["img"])
+    
+    return images
+
+
+def normalize_alert_config(alert):
+    """Normalise la configuration d'une alerte pour le nouveau format"""
+    normalized = alert.copy()
+    
+    # Convertir le format ancien vers le nouveau
+    if "img" in alert and "imgs" not in alert:
+        normalized["imgs"] = [alert["img"]]
+        # Garder l'ancienne clé pour la rétrocompatibilité
+    
+    # Valeurs par défaut
+    if "match_strategy" not in normalized:
+        normalized["match_strategy"] = "best"  # Stratégie par défaut
+    
+    if "min_area" not in normalized:
+        normalized["min_area"] = 100
+    
+    return normalized
+
+
 def validate_configuration():
     """Valide la configuration au démarrage"""
     errors = []
     warnings = []
     
-    # Vérifier les images d'alerte
+    # Vérifier les images d'alerte (nouveau système)
     for alert in ALERTS:
-        if 'img' in alert:
-            if not os.path.exists(alert['img']):
-                errors.append(f"Image manquante: {alert['img']} pour {alert['name']}")
-            else:
-                # Vérifier que le fichier est lisible
-                try:
-                    with open(alert['img'], 'rb') as f:
-                        # Lire les premiers bytes pour vérifier que c'est un fichier image
-                        header = f.read(8)
-                        if not (header.startswith(b'\x89PNG') or 
-                               header.startswith(b'\xff\xd8\xff') or
-                               header.startswith(b'GIF')):
-                            warnings.append(f"Fichier {alert['img']} n'est peut-être pas une image valide")
-                except Exception as e:
-                    errors.append(f"Impossible de lire {alert['img']}: {e}")
+        alert_name = alert.get('name', 'Alerte inconnue')
+        
+        # Alertes avec images
+        if 'imgs' in alert or 'img' in alert:
+            images = get_alert_images(alert)
+            
+            if not images:
+                errors.append(f"Aucune image spécifiée pour {alert_name}")
+                continue
+            
+            # Vérifier chaque image
+            valid_images = []
+            for img_path in images:
+                if not os.path.exists(img_path):
+                    warnings.append(f"Image manquante: {img_path} pour {alert_name}")
+                else:
+                    # Vérifier que le fichier est lisible
+                    try:
+                        with open(img_path, 'rb') as f:
+                            header = f.read(8)
+                            if not (header.startswith(b'\x89PNG') or 
+                                   header.startswith(b'\xff\xd8\xff') or
+                                   header.startswith(b'GIF')):
+                                warnings.append(f"Fichier {img_path} n'est peut-être pas une image valide")
+                            else:
+                                valid_images.append(img_path)
+                    except Exception as e:
+                        errors.append(f"Impossible de lire {img_path}: {e}")
+            
+            if not valid_images:
+                errors.append(f"Aucune image valide pour {alert_name}")
+            elif len(valid_images) != len(images):
+                warnings.append(f"Certaines images manquantes pour {alert_name} ({len(valid_images)}/{len(images)} valides)")
     
     # Vérifier et créer les dossiers nécessaires
     required_dirs = [
@@ -251,6 +323,11 @@ def validate_configuration():
         threshold = alert.get('threshold', 0)
         if not isinstance(threshold, (int, float)) or threshold < 0 or threshold > 1:
             errors.append(f"Seuil invalide pour {alert.get('name', 'unknown')}: {threshold}")
+        
+        # Vérifier la stratégie de correspondance
+        strategy = alert.get('match_strategy', 'best')
+        if strategy not in ['best', 'first', 'all']:
+            warnings.append(f"Stratégie de correspondance inconnue pour {alert.get('name', 'unknown')}: {strategy}")
     
     # Vérifier les sources configurées
     if not SOURCE_WINDOWS:
@@ -271,10 +348,16 @@ def validate_configuration():
 
 def get_configuration_summary():
     """Retourne un résumé de la configuration"""
+    total_images = 0
+    for alert in ALERTS:
+        if alert.get('enabled', True) and ('imgs' in alert or 'img' in alert):
+            total_images += len(get_alert_images(alert))
+    
     return {
         'sources_configured': len(SOURCE_WINDOWS),
         'alerts_total': len(ALERTS),
         'alerts_active': len(ACTIVE_ALERTS),
+        'total_template_images': total_images,
         'check_interval': CHECK_INTERVAL,
         'debug_mode': DEBUG_SAVE_SCREENSHOTS,
         'log_to_file': LOG_TO_FILE,
@@ -310,7 +393,20 @@ SOURCE_WINDOWS = [
     }
 ]
 
-# Ajoutez vos alertes personnalisées ici...
+# Exemple de configuration multi-images
+ALERTS = [
+    {
+        "imgs": ["DIG.png", "DIG_v2.png"],  # Plusieurs variantes
+        "name": "Dig!",
+        "threshold": 0.7,
+        "match_strategy": "best",  # Prendre la meilleure correspondance
+    },
+    {
+        "img": "egg.png",  # Format classique (rétrocompatible)
+        "name": "EGGGGGG!",
+        "threshold": 0.8,
+    }
+]
 """)
             return True
         except Exception as e:
@@ -338,6 +434,7 @@ if __name__ == "__main__":
         print("✅ Configuration valide")
         summary = get_configuration_summary()
         print(f"📊 Résumé: {summary['alerts_active']}/{summary['alerts_total']} alertes actives, "
-              f"{summary['sources_configured']} sources")
+              f"{summary['sources_configured']} sources, "
+              f"{summary['total_template_images']} images de template")
     else:
         print("❌ Configuration invalide - corrigez les erreurs avant de continuer")
