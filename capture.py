@@ -2,11 +2,15 @@
 """
 Module de capture intégré - Remplacement complet d'OBS
 Conserve l'interface existante pour une migration transparente
+VERSION FINALE avec capture Last War style OBS
 """
 
 import time
 import numpy as np
 import cv2
+import win32gui
+import win32ui
+from ctypes import windll
 from utils import log_error, log_debug, log_warning, log_info, ensure_directory_exists
 from config import MAX_CAPTURE_TIME_MS, DEBUG_SAVE_SCREENSHOTS, DEBUG_SCREENSHOT_PATH
 from capture_direct import (
@@ -60,6 +64,60 @@ capture_stats = CaptureStats()
 DIRECT_CAPTURE_INITIALIZED = False
 
 
+def capture_lastwar_like_obs(hwnd):
+    """
+    Capture Last War avec PrintWindow moderne (comme OBS)
+    Utilise le flag 0x00000003 (PW_CLIENTONLY | PW_RENDERFULLCONTENT)
+    C'est exactement la méthode OBS "Windows 10 (1903 and up)"
+    """
+    try:
+        rect = win32gui.GetWindowRect(hwnd)
+        width, height = rect[2] - rect[0], rect[3] - rect[1]
+        
+        if width <= 0 or height <= 0:
+            log_debug(f"Dimensions invalides Last War: {width}x{height}")
+            return None
+        
+        hwndDC = win32gui.GetWindowDC(hwnd)
+        mfcDC = win32ui.CreateDCFromHandle(hwndDC)
+        saveDC = mfcDC.CreateCompatibleDC()
+        saveBitMap = win32ui.CreateBitmap()
+        saveBitMap.CreateCompatibleBitmap(mfcDC, width, height)
+        saveDC.SelectObject(saveBitMap)
+        
+        # FLAG MAGIQUE OBS: 0x00000003 (PW_CLIENTONLY | PW_RENDERFULLCONTENT)
+        # C'est exactement ce qu'utilise OBS pour "Windows 10 (1903 and up)"
+        result = windll.user32.PrintWindow(hwnd, saveDC.GetSafeHdc(), 0x00000003)
+        
+        if result:
+            bmpstr = saveBitMap.GetBitmapBits(True)
+            img = np.frombuffer(bmpstr, dtype='uint8')
+            img.shape = (height, width, 4)
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+            
+            # Nettoyage
+            win32gui.DeleteObject(saveBitMap.GetHandle())
+            saveDC.DeleteDC()
+            mfcDC.DeleteDC()
+            win32gui.ReleaseDC(hwnd, hwndDC)
+            
+            log_debug(f"✅ Last War capture OBS-like réussie: {width}x{height}")
+            return img
+        else:
+            log_debug("PrintWindow moderne échoué pour Last War")
+        
+        # Nettoyage en cas d'échec
+        win32gui.DeleteObject(saveBitMap.GetHandle())
+        saveDC.DeleteDC()
+        mfcDC.DeleteDC()
+        win32gui.ReleaseDC(hwnd, hwndDC)
+        
+    except Exception as e:
+        log_error(f"Erreur capture Last War OBS-like: {e}")
+    
+    return None
+
+
 def initialize_capture_system(source_windows):
     """
     Initialise le système de capture directe
@@ -68,6 +126,7 @@ def initialize_capture_system(source_windows):
     global DIRECT_CAPTURE_INITIALIZED
     
     log_info("🚀 Initialisation du système de capture directe (sans OBS)")
+    log_info("✨ Support spécial Last War avec méthode OBS moderne")
     
     # Convertir la configuration SOURCE_WINDOWS vers le format attendu
     windows_config = []
@@ -85,17 +144,26 @@ def initialize_capture_system(source_windows):
     if success:
         DIRECT_CAPTURE_INITIALIZED = True
         log_info("✅ Système de capture directe initialisé avec succès")
-        log_info("🎯 Avantages: Capture des fenêtres cachées/minimisées activée")
+        log_info("🎯 Fonctionnalités:")
+        log_info("   • Capture Last War avec méthode OBS moderne")
+        log_info("   • Capture des fenêtres cachées/minimisées")
+        log_info("   • Pas de dépendance OBS")
         
         # Afficher les méthodes de capture par fenêtre
         for window in source_windows:
             window_title = window.get('window_title')
-            info = multi_capture.get_window_info(window_title)
-            if info:
-                log_info(f"📋 {window.get('source_name')} ({window_title}):")
-                log_info(f"   Processus: {info['process_name']}")
-                log_info(f"   État: {'Minimisée' if info['is_minimized'] else 'Normale'}")
-                log_info(f"   ✅ Capture fenêtres cachées supportée")
+            source_name = window.get('source_name')
+            
+            # Spécial Last War
+            if "Last War" in window_title:
+                log_info(f"🎮 {source_name}: Méthode OBS moderne (PrintWindow 0x00000003)")
+            else:
+                info = multi_capture.get_window_info(window_title)
+                if info:
+                    log_info(f"📋 {source_name} ({window_title}):")
+                    log_info(f"   Processus: {info['process_name']}")
+                    log_info(f"   État: {'Minimisée' if info['is_minimized'] else 'Normale'}")
+                    log_info(f"   Capture fenêtres cachées supportée")
     else:
         log_error("❌ Échec d'initialisation du système de capture directe")
         log_error("💡 Vérifiez que les fenêtres cibles sont ouvertes")
@@ -106,6 +174,7 @@ def initialize_capture_system(source_windows):
 def capture_window(ws_dummy, source_name, window_title, timeout_ms=MAX_CAPTURE_TIME_MS):
     """
     Fonction de capture compatible avec l'interface OBS existante
+    VERSION FINALE avec support Last War style OBS
     
     Args:
         ws_dummy: Paramètre ignoré (compatibilité OBS)
@@ -129,14 +198,47 @@ def capture_window(ws_dummy, source_name, window_title, timeout_ms=MAX_CAPTURE_T
             capture_stats.add_attempt(False, 0, error_msg)
             return None
         
-        log_debug(f"🎯 Capture directe: {source_name} ({window_title})")
+        log_debug(f"🎯 Capture finale: {source_name} ({window_title})")
         
+        # SPÉCIAL LAST WAR : méthode moderne OBS directe
+        if "Last War" in window_title:
+            hwnd = win32gui.FindWindow(None, window_title)
+            if hwnd:
+                img = capture_lastwar_like_obs(hwnd)
+                
+                if img is not None:
+                    capture_time = (time.time() - start_time) * 1000
+                    capture_stats.add_attempt(True, capture_time)
+                    
+                    # Vérification de timeout
+                    if capture_time > timeout_ms:
+                        log_warning(f"Capture {source_name} lente: {capture_time:.1f}ms > {timeout_ms}ms")
+                    
+                    # Amélioration de la qualité (optionnel)
+                    try:
+                        img = enhance_image_quality(img)
+                    except Exception as e:
+                        log_debug(f"Erreur amélioration image: {e}")
+                        # Continuer avec l'image non-améliorée
+                    
+                    log_debug(f"✅ Last War OBS moderne: {img.shape} en {capture_time:.1f}ms")
+                    
+                    # Sauvegarde debug si activée
+                    save_debug_screenshot(img, source_name, True)
+                    
+                    return img
+                else:
+                    log_debug("Capture OBS moderne échouée pour Last War, essai méthode standard...")
+            else:
+                log_warning(f"Fenêtre Last War non trouvée pour capture OBS moderne")
+
+        # Pour toutes les autres fenêtres (et Last War si la méthode moderne échoue)
         # Ajouter la fenêtre si pas encore enregistrée
         if window_title not in multi_capture.capturers:
             multi_capture.add_window(window_title)
             log_debug(f"Fenêtre ajoutée à la surveillance: {window_title}")
         
-        # Capturer l'image
+        # Capturer l'image avec le système standard
         img = capture_window_direct(window_title)
         
         capture_time = (time.time() - start_time) * 1000
@@ -283,7 +385,7 @@ def save_debug_screenshot(image, source_name, success=True, error=None):
                 f.write(f"Erreur: {error}\n")
                 f.write(f"Timestamp: {timestamp}\n")
                 f.write(f"Source: {source_name}\n")
-                f.write(f"Mode: Capture directe (sans OBS)\n")
+                f.write(f"Mode: Capture directe avec support Last War OBS\n")
                 
     except Exception as e:
         log_error(f"Erreur sauvegarde debug screenshot: {e}")
@@ -307,9 +409,10 @@ def get_capture_statistics():
         
         # Nouvelles statistiques détaillées
         'direct_capture_stats': direct_stats,
-        'capture_mode': 'direct_capture',
+        'capture_mode': 'direct_capture_with_obs_lastwar',
         'obs_required': False,
-        'hidden_window_support': True
+        'hidden_window_support': True,
+        'lastwar_obs_support': True  # NOUVEAU
     }
 
 
@@ -333,7 +436,11 @@ def test_capture_performance(source_name, window_title, iterations=10):
     """
     Test de performance de capture (compatible avec l'ancienne interface)
     """
-    log_info(f"Test de performance capture directe pour {source_name} ({iterations} itérations)")
+    log_info(f"Test de performance capture pour {source_name} ({iterations} itérations)")
+    
+    # Test spécial Last War
+    if "Last War" in window_title:
+        log_info("🎮 Test spécial Last War avec méthode OBS moderne")
     
     if window_title not in multi_capture.capturers:
         multi_capture.add_window(window_title)
@@ -373,95 +480,13 @@ def test_capture_performance(source_name, window_title, iterations=10):
         'min_duration_ms': min(durations) if durations else 0,
         'max_duration_ms': max(durations) if durations else 0,
         'results': results,
-        'capture_mode': 'direct_capture'
+        'capture_mode': 'direct_capture_with_obs_lastwar'
     }
     
     log_info(f"Test terminé - Succès: {success_count}/{iterations} ({stats['success_rate']:.1f}%), "
              f"Temps moyen: {stats['average_duration_ms']:.1f}ms")
     
     return stats
-
-
-def get_window_capture_info(window_title):
-    """
-    NOUVEAU: Récupère les informations détaillées d'une fenêtre
-    """
-    return multi_capture.get_window_info(window_title)
-
-
-def optimize_capture_method(source_name, window_title, test_iterations=5):
-    """
-    NOUVEAU: Optimise automatiquement la méthode de capture pour une fenêtre
-    """
-    log_info(f"🎯 Optimisation méthode de capture pour {source_name}")
-    
-    if window_title not in multi_capture.capturers:
-        multi_capture.add_window(window_title)
-    
-    capturer = multi_capture.capturers[window_title]
-    
-    # Test de toutes les méthodes
-    from capture_direct import benchmark_capture_methods
-    results = benchmark_capture_methods(window_title, test_iterations)
-    
-    if results:
-        # Trouver la meilleure méthode
-        best_method = max(results.items(), 
-                         key=lambda x: (x[1]['success_rate'], -x[1]['avg_time_ms']))
-        
-        # Appliquer la meilleure méthode
-        capturer.preferred_method = best_method[0]
-        
-        log_info(f"✅ Méthode optimisée pour {source_name}: {best_method[0]}")
-        log_info(f"   Taux de succès: {best_method[1]['success_rate']:.1f}%")
-        log_info(f"   Temps moyen: {best_method[1]['avg_time_ms']:.1f}ms")
-        
-        return best_method[0]
-    
-    return None
-
-
-def switch_capture_method(window_title, method):
-    """
-    NOUVEAU: Change la méthode de capture pour une fenêtre spécifique
-    """
-    if window_title in multi_capture.capturers:
-        multi_capture.capturers[window_title].preferred_method = method
-        log_info(f"Méthode de capture changée pour {window_title}: {method}")
-        return True
-    
-    return False
-
-
-def get_available_windows():
-    """
-    NOUVEAU: Liste toutes les fenêtres disponibles pour capture
-    """
-    import win32gui
-    
-    def enum_window_callback(hwnd, results):
-        if win32gui.IsWindowVisible(hwnd):
-            window_text = win32gui.GetWindowText(hwnd)
-            if window_text:  # Ignorer les fenêtres sans titre
-                results.append({
-                    'hwnd': hwnd,
-                    'title': window_text,
-                    'class_name': win32gui.GetClassName(hwnd)
-                })
-        return True
-    
-    results = []
-    win32gui.EnumWindows(enum_window_callback, results)
-    
-    # Filtrer et trier
-    filtered_results = []
-    for window in results:
-        title = window['title']
-        # Exclure les fenêtres système communes
-        if not any(skip in title.lower() for skip in ['program manager', 'task switching', 'cortana']):
-            filtered_results.append(window)
-    
-    return sorted(filtered_results, key=lambda x: x['title'])
 
 
 # Fonctions de compatibilité pour l'interface OBS
@@ -479,7 +504,7 @@ def reconnect_obs():
     """Fonction de compatibilité - réinitialise le système de capture"""
     global DIRECT_CAPTURE_INITIALIZED
     
-    log_info("🔄 Réinitialisation du système de capture directe...")
+    log_info("🔄 Réinitialisation du système de capture directe avec support Last War...")
     
     # Réinitialiser les capteurs
     for capturer in multi_capture.capturers.values():
@@ -509,21 +534,65 @@ def cleanup_capture_system():
     log_info("✅ Système de capture nettoyé")
 
 
+# Fonctions additionnelles pour le support Last War
+def get_window_capture_info(window_title):
+    """
+    Récupère les informations détaillées d'une fenêtre
+    """
+    return multi_capture.get_window_info(window_title)
+
+
+def optimize_capture_method(source_name, window_title, test_iterations=5):
+    """
+    Optimise automatiquement la méthode de capture pour une fenêtre
+    """
+    log_info(f"🎯 Optimisation méthode de capture pour {source_name}")
+    
+    if "Last War" in window_title:
+        log_info("🎮 Last War détecté - Méthode OBS moderne déjà optimale")
+        return "obs_modern_printwindow"
+    
+    if window_title not in multi_capture.capturers:
+        multi_capture.add_window(window_title)
+    
+    capturer = multi_capture.capturers[window_title]
+    
+    # Test de toutes les méthodes
+    from capture_direct import benchmark_capture_methods
+    results = benchmark_capture_methods(window_title, test_iterations)
+    
+    if results:
+        # Trouver la meilleure méthode
+        best_method = max(results.items(), 
+                         key=lambda x: (x[1]['success_rate'], -x[1]['avg_time_ms']))
+        
+        # Appliquer la meilleure méthode
+        capturer.preferred_method = best_method[0]
+        
+        log_info(f"✅ Méthode optimisée pour {source_name}: {best_method[0]}")
+        log_info(f"   Taux de succès: {best_method[1]['success_rate']:.1f}%")
+        log_info(f"   Temps moyen: {best_method[1]['avg_time_ms']:.1f}ms")
+        
+        return best_method[0]
+    
+    return None
+
+
 if __name__ == "__main__":
-    # Test du système intégré
-    print("🧪 Test du système de capture intégré")
+    # Test du système intégré avec support Last War
+    print("🧪 Test du système de capture final avec support Last War OBS")
     
     # Configuration de test
     test_windows = [
         {
-            'source_name': 'test_notepad',
-            'window_title': 'Notepad',
+            'source_name': 'test_lastwar',
+            'window_title': 'Last War-Survival Game',
             'notification_cooldown': 30,
             'priority': 1
         },
         {
-            'source_name': 'test_calc',
-            'window_title': 'Calculator',
+            'source_name': 'test_bluestacks',
+            'window_title': 'BlueStacks App Player',
             'notification_cooldown': 30,
             'priority': 2
         }
@@ -531,7 +600,7 @@ if __name__ == "__main__":
     
     # Initialiser
     if initialize_capture_system(test_windows):
-        print("✅ Système initialisé")
+        print("✅ Système initialisé avec support Last War OBS")
         
         # Tester les captures
         for window in test_windows:
@@ -540,18 +609,31 @@ if __name__ == "__main__":
             
             print(f"\n🎯 Test capture: {source_name}")
             
+            if "Last War" in window_title:
+                print("🎮 Test méthode OBS moderne pour Last War")
+            
             img = capture_window(None, source_name, window_title)
             if img is not None:
                 print(f"   ✅ Succès: {img.shape}")
+                
+                # Analyse qualité
+                mean_color = np.mean(img)
+                std_color = np.std(img)
+                print(f"   📊 Qualité: luminosité={mean_color:.1f}, variation={std_color:.1f}")
+                
+                if std_color > 40:
+                    print(f"   🏆 Excellente qualité!")
+                
             else:
                 print(f"   ❌ Échec")
         
         # Afficher les statistiques
         stats = get_capture_statistics()
-        print(f"\n📊 Statistiques:")
+        print(f"\n📊 Statistiques finales:")
         print(f"   Tentatives: {stats['total_attempts']}")
         print(f"   Succès: {stats['successful_captures']}")
         print(f"   Taux: {stats['success_rate']:.1f}%")
+        print(f"   Support Last War OBS: {stats['lastwar_obs_support']}")
         
     else:
         print("❌ Échec d'initialisation")

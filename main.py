@@ -15,7 +15,7 @@ import json
 from config import ALERTS, COOLDOWN_PERIOD, CHECK_INTERVAL, WINDOW_RETRY_INTERVAL, SOURCE_WINDOWS
 from capture import (
     capture_window, initialize_capture_system, is_obs_connected, 
-    reconnect_obs, cleanup_capture_system, get_capture_statistics
+    cleanup_capture_system, get_capture_statistics
 )
 from detection import check_for_alert, cleanup_template_cache_if_needed
 from webapp import (init_webapp, start_webapp, update_webapp_data, add_webapp_alert, 

@@ -2,19 +2,30 @@
 import os
 from collections import deque
 
+
+# Constantes pour les méthodes de capture (copie locale)
+CAPTURE_METHODS = {
+    "WIN32_GDI": "win32_gdi",
+    "WIN32_PRINT_WINDOW": "print_window", 
+    "MSS_MONITOR": "mss_monitor",
+    "PIL_IMAGEGRAB": "pil_imagegrab"
+}
+
 # Configuration des fenêtres avec paramètres spécifiques
 SOURCE_WINDOWS = [
     {
         "source_name": "last war!",
         "window_title": "Last War-Survival Game", 
         "notification_cooldown": 30,
-        "priority": 1  # Priorité haute
+        "priority": 1,
+        "capture_method": CAPTURE_METHODS["WIN32_PRINT_WINDOW"]  # Force PrintWindow
     },
     {
         "source_name": "bluestack",
         "window_title": "BlueStacks App Player",
-        "notification_cooldown": 45,  # Cooldown plus long
-        "priority": 2  # Priorité normale
+        "notification_cooldown": 45,
+        "priority": 2,
+        "capture_method": CAPTURE_METHODS["WIN32_GDI"]  # GDI pour BlueStacks
     },
 ]
 
@@ -211,6 +222,26 @@ ERROR_RECOVERY = {
     }
 }
 
+
+def get_capture_method(method_name):
+    """Convertit une chaîne en CaptureMethod (évite l'import circulaire)"""
+    if method_name == "WIN32_PRINT_WINDOW":
+        # Import local pour éviter l'import circulaire
+        from capture_direct import CaptureMethod
+        return CaptureMethod.WIN32_PRINT_WINDOW
+    elif method_name == "WIN32_GDI":
+        from capture_direct import CaptureMethod
+        return CaptureMethod.WIN32_GDI
+    elif method_name == "MSS_MONITOR":
+        from capture_direct import CaptureMethod
+        return CaptureMethod.MSS_MONITOR
+    elif method_name == "PIL_IMAGEGRAB":
+        from capture_direct import CaptureMethod
+        return CaptureMethod.PIL_IMAGEGRAB
+    else:
+        # Par défaut
+        from capture_direct import CaptureMethod
+        return CaptureMethod.WIN32_PRINT_WINDOW
 
 def get_alert_images(alert):
     """Retourne la liste des images pour une alerte (nouveau format ou ancien)"""
