@@ -345,7 +345,7 @@ def main():
                     state["total_captures"] += 1
 
                     try:
-                        # NOUVEAU: Capture directe (sans paramètre ws)
+                        # Capture directe (sans paramètre ws)
                         screenshot = capture_window(None, source_name, window_title)
                         capture_time = (time.time() - capture_start) * 1000
                         state["performance_ms"] = capture_time
@@ -356,7 +356,6 @@ def main():
                             state["error_count"] += 1
                             log_debug(f"Capture échouée pour {source_name} (échecs consécutifs: {state['consecutive_failures']})")
                             
-                            # AMÉLIORATION: Diagnostic spécifique pour capture directe
                             if state["consecutive_failures"] == 1:
                                 window_info = get_window_capture_info(window_title)
                                 if window_info:
@@ -370,7 +369,6 @@ def main():
                             if state["consecutive_failures"] >= 5:
                                 log_error(f"Trop d'échecs pour {source_name}, pause longue")
                                 
-                                # NOUVEAU: Tentative d'optimisation automatique
                                 if state["consecutive_failures"] == 5:
                                     log_info(f"🔧 Tentative d'optimisation capture pour {source_name}")
                                     from capture import optimize_capture_method
@@ -382,10 +380,13 @@ def main():
                                 time.sleep(WINDOW_RETRY_INTERVAL)
                             continue
 
-                        # Toujours sauvegarder le dernier screenshot
-                        update_webapp_screenshot(source_name, screenshot, False, None)
+                        # INITIALISER LES VARIABLES ICI
+                        alert_detected = False
+                        current_alert = None
+                        max_confidence = 0.0
+                        detection_area = None
 
-                        # Vérification d'écran noir (améliorée pour capture directe)
+                        # Vérification d'écran noir
                         if is_black_screen(screenshot):
                             current_black_screen_time = current_time
                             last_black_screen_notification = state.get("last_black_screen_notification", 0)
@@ -400,6 +401,9 @@ def main():
                                 
                             state["consecutive_failures"] += 1
                             state["last_error"] = f"Écran noir détecté"
+                            
+                            # Sauvegarder le screenshot même si écran noir (sans détection)
+                            update_webapp_screenshot(source_name, screenshot, False, None, None, 0.0)
                         else:
                             # Reset des erreurs d'écran noir
                             last_error = state.get("last_error")
@@ -407,77 +411,83 @@ def main():
                                 state["consecutive_failures"] = 0
                                 state["last_error"] = None
 
-                        state["successful_captures"] += 1
-                        state["last_error"] = None
+                            state["successful_captures"] += 1
+                            state["last_error"] = None
 
-                        # Détection d'alertes avec zone de détection (inchangé)
-                        alert_detected = False
-                        current_alert = None
-                        max_confidence = 0.0
-                        detection_area = None
-
-                        for alert in ALERTS:
-                            if not alert.get('enabled', True):
-                                continue
-                                
-                            try:
-                                result = check_for_alert(screenshot, alert, return_confidence=True, return_area=True)
-                                
-                                if isinstance(result, tuple) and len(result) == 2:
-                                    confidence, area = result
-                                else:
-                                    confidence = result
-                                    area = None
-                                
-                                if confidence > max_confidence:
-                                    max_confidence = confidence
-                                    detection_area = area
+                            # Détection d'alertes avec zone de détection
+                            for alert in ALERTS:
+                                if not alert.get('enabled', True):
+                                    continue
                                     
-                                if confidence >= alert['threshold']:
-                                    alert_detected = True
-                                    current_alert = alert
-                                    state["last_alert_name"] = alert["name"]
-                                    state["total_detections"] += 1
-                                    log_info(f"Alerte détectée dans {source_name}: {alert['name']} (confiance: {confidence:.3f})")
-                                    break
-                            except Exception as e:
-                                log_error(f"Erreur lors de la vérification de l'alerte {alert.get('name', 'inconnue')}: {e}")
-                                continue
+                                try:
+                                    result = check_for_alert(screenshot, alert, return_confidence=True, return_area=True)
+                                    
+                                    if isinstance(result, tuple) and len(result) == 2:
+                                        confidence, area = result
+                                    else:
+                                        confidence = result
+                                        area = None
+                                    
+                                    if confidence > max_confidence:
+                                        max_confidence = confidence
+                                        detection_area = area
+                                        
+                                    if confidence >= alert['threshold']:
+                                        alert_detected = True
+                                        current_alert = alert
+                                        state["last_alert_name"] = alert["name"]
+                                        state["total_detections"] += 1
+                                        log_info(f"Alerte détectée dans {source_name}: {alert['name']} (confiance: {confidence:.3f})")
+                                        break
+                                except Exception as e:
+                                    log_error(f"Erreur lors de la vérification de l'alerte {alert.get('name', 'inconnue')}: {e}")
+                                    continue
 
-                        state["last_confidence"] = max_confidence
+                            state["last_confidence"] = max_confidence
 
-                        # Gestion des détections consécutives
-                        if alert_detected:
-                            state["consecutive_detections"] += 1
-                        else:
-                            state["consecutive_detections"] = 0
-
-                        # Logique de notification
-                        should_notify = False
-                        if alert_detected:
-                            time_since_last = current_time - state["last_notification_time"]
-                            cooldown = state["notification_cooldown"]
-                            
-                            if (not state["last_alert_state"]) or \
-                               (time_since_last > cooldown and state["consecutive_detections"] >= 3):
-                                should_notify = True
-
-                        if should_notify and current_alert:
-                            title = f"{source_name} - {current_alert['name']}"
-                            message = f"{current_alert['name']} (Confiance: {max_confidence:.1%})"
-                            
-                            if notification_queue.add_notification(title, message):
-                                state["last_notification_time"] = current_time
-                                state["notifications_sent"] += 1
-                                log_info(f"Notification envoyée pour {source_name}: {current_alert['name']}")
-                                
-                                add_webapp_alert(source_name, current_alert['name'], max_confidence, 
-                                                screenshot, detection_area)
+                            # Gestion des détections consécutives
+                            if alert_detected:
+                                state["consecutive_detections"] += 1
                             else:
-                                log_error(f"Échec envoi notification pour {source_name}")
+                                state["consecutive_detections"] = 0
 
-                        state["last_alert_state"] = alert_detected
-                        state["last_capture_time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                            # Logique de notification
+                            should_notify = False
+                            if alert_detected:
+                                time_since_last = current_time - state["last_notification_time"]
+                                cooldown = state["notification_cooldown"]
+                                
+                                if (not state["last_alert_state"]) or \
+                                (time_since_last > cooldown and state["consecutive_detections"] >= 3):
+                                    should_notify = True
+
+                            if should_notify and current_alert:
+                                title = f"{source_name} - {current_alert['name']}"
+                                message = f"{current_alert['name']} (Confiance: {max_confidence:.1%})"
+                                
+                                if notification_queue.add_notification(title, message):
+                                    state["last_notification_time"] = current_time
+                                    state["notifications_sent"] += 1
+                                    log_info(f"Notification envoyée pour {source_name}: {current_alert['name']}")
+                                    
+                                    add_webapp_alert(source_name, current_alert['name'], max_confidence, 
+                                                    screenshot, detection_area)
+                                else:
+                                    log_error(f"Échec envoi notification pour {source_name}")
+
+                            state["last_alert_state"] = alert_detected
+                            state["last_capture_time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                            
+                            # Sauvegarder le screenshot avec la zone de détection
+                            # CORRECTION: Appel correct de la fonction
+                            from webapp import update_webapp_screenshot_with_detection
+                            update_webapp_screenshot_with_detection(
+                                source_name, 
+                                screenshot, 
+                                detection_area,
+                                current_alert['name'] if current_alert else None,
+                                max_confidence
+                            )
 
                     except Exception as e:
                         state["error_count"] += 1

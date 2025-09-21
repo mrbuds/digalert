@@ -348,6 +348,76 @@
         .live-thumbnail.updating {
             opacity: 0.7;
         }
+
+        .detection-validation {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 5px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
+        .validation-btn {
+            padding: 5px 10px;
+            margin: 0 2px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .validation-btn.valid {
+            background: #28a745;
+            color: white;
+        }
+        
+        .validation-btn.invalid {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .validation-btn:hover {
+            transform: scale(1.1);
+        }
+        
+        .detection-box {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .learning-stats {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .stat-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 15px;
+            margin: 2px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .stat-badge.good {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .stat-badge.warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .stat-badge.bad {
+            background: #f8d7da;
+            color: #721c24;
+        }
     </style>
 </head>
 <body>
@@ -588,25 +658,32 @@
                 const card = document.createElement('div');
                 card.className = `status-card ${source.status_color}`;
                 
-                const statusIcon = getStatusIcon(source.status);
-                const confidenceColor = getConfidenceColor(source.last_confidence);
-                
                 let screenshotSection = '';
                 if (source.has_screenshot) {
+                    // Utiliser l'image marquée avec la zone de détection
+                    const imageUrl = source.has_detection ? 
+                        `/api/screenshot/${source.source_name}?marked=true&t=${Date.now()}` : 
+                        source.screenshot_url;
+                    
                     screenshotSection = `
-                        <div class="col-md-2">
-                            <div class="text-center">
-                                <div class="detection-area">
-                                    <img src="${source.screenshot_url}" 
-                                         class="screenshot-thumbnail live-thumbnail" 
-                                         onclick="showScreenshotModal('${source.source_name}', '${source.screenshot_url}')"
-                                         alt="Capture ${source.source_name}"
-                                         loading="lazy">
-                                    ${source.has_detection ? '<div class="detection-badge">!</div>' : ''}
-                                </div>
+                        <div class="col-md-3">
+                            <div class="detection-box">
+                                <img src="${imageUrl}" 
+                                    class="screenshot-thumbnail" 
+                                    onclick="showScreenshotModal('${source.source_name}', '${imageUrl}')"
+                                    alt="Capture ${source.source_name}">
                                 ${source.has_detection ? `
-                                    <div class="mt-1">
-                                        <small class="text-success">Zone détectée</small>
+                                    <div class="detection-validation">
+                                        <button class="validation-btn valid" 
+                                                onclick="validateDetection('${source.source_name}', '${source.last_alert_name}', true, ${source.last_confidence}, event)"
+                                                title="Détection correcte">
+                                            ✓
+                                        </button>
+                                        <button class="validation-btn invalid"
+                                                onclick="validateDetection('${source.source_name}', '${source.last_alert_name}', false, ${source.last_confidence}, event)"
+                                                title="Faux positif">
+                                            ✗
+                                        </button>
                                     </div>
                                 ` : ''}
                             </div>
@@ -614,53 +691,120 @@
                     `;
                 }
                 
+                // Reste du code pour créer la carte...
                 card.innerHTML = `
-                    <div class="row align-items-center">
-                        <div class="col-md-3">
-                            <h5 class="mb-1">${statusIcon} ${source.source_name}</h5>
-                            <span class="badge bg-${source.status_color}">${source.status}</span>
-                        </div>
-                        <div class="col-md-2">
-                            <div class="metric-value" style="font-size: 1.2rem;">${source.last_capture_relative}</div>
-                            <div class="metric-label">Dernière capture</div>
-                        </div>
-                        <div class="col-md-2">
-                            <div class="metric-value" style="font-size: 1.2rem; color: ${confidenceColor};">
-                                ${source.confidence_percent}
-                            </div>
-                            <div class="metric-label">Confiance</div>
-                        </div>
-                        <div class="col-md-1">
-                            <div class="metric-value" style="font-size: 1.2rem;">${source.total_detections}</div>
-                            <div class="metric-label">Détections</div>
-                        </div>
-                        <div class="col-md-1">
-                            <div class="metric-value" style="font-size: 1.2rem; color: ${getSuccessRateColor(source.success_rate)};">
-                                ${source.success_rate.toFixed(0)}%
-                            </div>
-                            <div class="metric-label">Succès</div>
-                        </div>
-                        ${screenshotSection}
-                        <div class="col-md-1">
-                            ${source.error_count > 0 ? `<span class="badge bg-danger">${source.error_count}</span>` : '<span class="text-success">✓</span>'}
-                        </div>
-                    </div>
-                    ${source.last_alert_name !== 'Aucune' ? `
-                        <div class="mt-2">
-                            <small class="text-muted">Dernière alerte: <strong>${source.last_alert_name}</strong></small>
-                        </div>
-                    ` : ''}
-                    ${source.last_error ? `
-                        <div class="mt-2">
-                            <small class="text-danger"><i class="fas fa-exclamation-triangle"></i> ${source.last_error}</small>
-                        </div>
-                    ` : ''}
+                    <!-- Contenu de la carte avec screenshot section -->
+                    ${screenshotSection}
                 `;
                 
                 container.appendChild(card);
             });
             
             document.getElementById('total-alerts').textContent = totalAlerts;
+        }
+
+        function validateDetection(sourceName, alertName, isValid, confidence, event) {
+            event.stopPropagation(); // Empêcher l'ouverture du modal
+            
+            const detectionParams = {
+                confidence: confidence,
+                threshold: 0.7, // À adapter
+                timestamp: new Date().toISOString()
+            };
+            
+            fetch('/api/validate_detection', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    source_name: sourceName,
+                    alert_name: alertName,
+                    is_valid: isValid,
+                    detection_params: detectionParams
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Validation enregistrée', data.message);
+                    
+                    // Mettre à jour les statistiques affichées
+                    updateLearningStats(data.statistics);
+                    
+                    // Effet visuel
+                    const btn = event.target;
+                    btn.style.background = isValid ? '#28a745' : '#dc3545';
+                    btn.style.transform = 'scale(1.2)';
+                    setTimeout(() => {
+                        btn.style.transform = 'scale(1)';
+                    }, 300);
+                }
+            })
+            .catch(error => {
+                console.error('Erreur validation:', error);
+                showNotification('Erreur', 'Impossible d\'enregistrer la validation');
+            });
+        }
+
+        function updateLearningStats(stats) {
+            // Créer ou mettre à jour la section des statistiques d'apprentissage
+            let statsContainer = document.getElementById('learning-stats');
+            if (!statsContainer) {
+                // Créer la section si elle n'existe pas
+                const mainContainer = document.querySelector('.dashboard-container');
+                statsContainer = document.createElement('div');
+                statsContainer.id = 'learning-stats';
+                statsContainer.className = 'learning-stats';
+                mainContainer.appendChild(statsContainer);
+            }
+            
+            let html = '<h4><i class="fas fa-brain"></i> Apprentissage automatique</h4>';
+            html += `<p>Total validations: ${stats.total_validations}</p>`;
+            
+            if (stats.alerts) {
+                html += '<div class="row">';
+                
+                for (const [alertName, alertStats] of Object.entries(stats.alerts)) {
+                    const precision = alertStats.precision || 0;
+                    let badgeClass = 'good';
+                    if (precision < 70) badgeClass = 'bad';
+                    else if (precision < 85) badgeClass = 'warning';
+                    
+                    html += `
+                        <div class="col-md-4 mb-2">
+                            <div class="alert-stat-card">
+                                <strong>${alertName}</strong><br>
+                                <span class="stat-badge ${badgeClass}">
+                                    Précision: ${precision.toFixed(1)}%
+                                </span>
+                                <small class="d-block">
+                                    ✓ ${alertStats.true_positives} | ✗ ${alertStats.false_positives}
+                                </small>
+                                ${alertStats.threshold_adjustment ? 
+                                    `<small class="text-info">Seuil ajusté: ${alertStats.threshold_adjustment.suggested_threshold.toFixed(3)}</small>` 
+                                    : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                html += '</div>';
+            }
+            
+            statsContainer.innerHTML = html;
+        }
+
+        // Charger les stats d'apprentissage au démarrage
+        function loadLearningStats() {
+            fetch('/api/learning_statistics')
+                .then(response => response.json())
+                .then(stats => {
+                    updateLearningStats(stats);
+                })
+                .catch(error => {
+                    console.error('Erreur chargement stats apprentissage:', error);
+                });
         }
         
         function updateAlertsHistory(alerts) {
@@ -871,6 +1015,11 @@
                 event.preventDefault();
                 togglePause();
             }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLearningStats();
+            setInterval(loadLearningStats, 30000); // Rafraîchir toutes les 30 secondes
         });
         
         // Démarrage

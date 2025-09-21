@@ -8,6 +8,7 @@ import os
 import cv2
 import numpy as np
 from utils import log_error, log_debug, log_info, log_warning
+from learning_system import validate_detection, get_learning_statistics
 
 class WebAppManager:
     """Gestionnaire de l'interface web avec historique des alertes"""
@@ -90,8 +91,18 @@ class WebAppManager:
         @self.app.route('/api/screenshot/<source_name>')
         def api_screenshot(source_name):
             """API pour récupérer le screenshot d'une source"""
+            marked = request.args.get('marked', 'false').lower() == 'true'
+            
             if source_name in self.latest_screenshots:
-                screenshot_path = self.latest_screenshots[source_name].get('screenshot_path')
+                screenshot_data = self.latest_screenshots[source_name]
+                
+                # Choisir la version marquée ou clean selon le paramètre
+                if marked and screenshot_data.get('screenshot_path_marked'):
+                    screenshot_path = screenshot_data['screenshot_path_marked']
+                else:
+                    screenshot_path = screenshot_data.get('screenshot_path_clean') or \
+                                    screenshot_data.get('screenshot_path')
+                
                 if screenshot_path and os.path.exists(screenshot_path):
                     return send_file(screenshot_path, mimetype='image/png')
             
@@ -195,6 +206,55 @@ class WebAppManager:
             except Exception as e:
                 log_error(f"Erreur réinitialisation stats: {e}")
                 return jsonify({'success': False, 'error': str(e)})
+
+        @self.app.route('/api/validate_detection', methods=['POST'])
+        def api_validate_detection():
+            """API pour valider ou rejeter une détection"""
+            try:
+                data = request.json
+                alert_name = data.get('alert_name')
+                source_name = data.get('source_name')
+                is_valid = data.get('is_valid', True)
+                detection_params = data.get('detection_params', {})
+                
+                # Récupérer la région du screenshot si disponible
+                screenshot_region = None
+                if source_name in self.latest_screenshots:
+                    screenshot_data = self.latest_screenshots[source_name]
+                    if screenshot_data.get('has_detection'):
+                        # Charger l'image et extraire la région
+                        clean_path = screenshot_data.get('screenshot_path_clean')
+                        if clean_path and os.path.exists(clean_path):
+                            img = cv2.imread(clean_path)
+                            area = screenshot_data.get('detection_area')
+                            if img is not None and area:
+                                x, y, w, h = area['x'], area['y'], area['width'], area['height']
+                                screenshot_region = img[y:y+h, x:x+w]
+                
+                # Enregistrer la validation
+                validate_detection(alert_name, detection_params, is_valid, screenshot_region)
+                
+                # Retourner les nouvelles statistiques
+                stats = get_learning_statistics()
+                
+                return jsonify({
+                    'success': True,
+                    'message': f"Détection {'validée' if is_valid else 'marquée comme faux positif'}",
+                    'statistics': stats
+                })
+                
+            except Exception as e:
+                log_error(f"Erreur validation détection: {e}")
+                return jsonify({'success': False, 'error': str(e)})
+
+        @self.app.route('/api/learning_statistics')
+        def api_learning_statistics():
+            """API pour récupérer les statistiques d'apprentissage"""
+            try:
+                stats = get_learning_statistics()
+                return jsonify(stats)
+            except Exception as e:
+                return jsonify({'error': str(e)})
     
     def format_windows_state(self):
         """Formate l'état des fenêtres pour l'API"""
@@ -468,6 +528,73 @@ class WebAppManager:
         except Exception as e:
             log_error(f"Erreur nettoyage screenshots: {e}")
     
+    def update_screenshot_with_detection(self, source_name, screenshot, detection_area=None, 
+                                    alert_name=None, confidence=0.0):
+        """Met à jour le screenshot avec la zone de détection marquée"""
+        try:
+            if screenshot is None:
+                return None
+            
+            timestamp = datetime.now()
+            clean_source = source_name.replace(' ', '_').replace('!', '')
+            
+            # Créer une copie pour marquer la détection
+            marked_screenshot = screenshot.copy()
+            
+            # Si une zone de détection existe, la dessiner
+            if detection_area and 'x' in detection_area:
+                x = detection_area['x']
+                y = detection_area['y']
+                w = detection_area['width']
+                h = detection_area['height']
+                
+                # Dessiner le rectangle de détection
+                color = (0, 255, 0) if confidence >= 0.8 else (0, 165, 255) if confidence >= 0.5 else (0, 0, 255)
+                cv2.rectangle(marked_screenshot, (x, y), (x + w, y + h), color, 3)
+                
+                # Ajouter le texte avec les infos
+                if alert_name:
+                    text = f"{alert_name}: {confidence:.1%}"
+                    text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)[0]
+                    
+                    # Fond pour le texte
+                    cv2.rectangle(marked_screenshot, (x, y - 30), (x + text_size[0] + 10, y), color, -1)
+                    cv2.putText(marked_screenshot, text, (x + 5, y - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    
+                    # Infos supplémentaires si disponibles
+                    if 'scale' in detection_area:
+                        info_text = f"S:{detection_area['scale']:.2f} R:{detection_area.get('aspect_ratio', 1.0):.2f}"
+                        cv2.putText(marked_screenshot, info_text, (x + 5, y + h + 20),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            
+            # Sauvegarder deux versions : avec et sans marquage
+            filename_marked = f"{clean_source}_latest_marked.png"
+            filename_clean = f"{clean_source}_latest_clean.png"
+            
+            filepath_marked = f"static/screenshots/{filename_marked}"
+            filepath_clean = f"static/screenshots/{filename_clean}"
+            
+            cv2.imwrite(filepath_marked, marked_screenshot)
+            cv2.imwrite(filepath_clean, screenshot)
+            
+            # Mettre à jour avec les deux versions
+            self.latest_screenshots[source_name] = {
+                'timestamp': timestamp.isoformat(),
+                'screenshot_path_marked': filepath_marked,
+                'screenshot_path_clean': filepath_clean,
+                'has_detection': detection_area is not None,
+                'detection_area': detection_area,
+                'alert_name': alert_name,
+                'confidence': confidence
+            }
+            
+            return filename_marked
+            
+        except Exception as e:
+            log_error(f"Erreur mise à jour screenshot avec détection: {e}")
+            return None
+
     def start(self):
         """Démarre le serveur web dans un thread séparé"""
         if not self.running:
@@ -530,11 +657,14 @@ def add_webapp_alert(source_name, alert_name, confidence, screenshot=None, detec
     if webapp_manager:
         webapp_manager.add_alert(source_name, alert_name, confidence, screenshot, detection_area)
 
-def update_webapp_screenshot(source_name, screenshot, has_alert=False, alert_name=None):
-    """Met à jour le screenshot pour une source"""
+def update_webapp_screenshot(source_name, screenshot, has_alert=False, detection_area=None, 
+                            alert_name=None, confidence=0.0):
+    """Met à jour le screenshot pour une source avec zone de détection"""
     global webapp_manager
     if webapp_manager:
-        result = webapp_manager.update_screenshot(source_name, screenshot, has_alert, alert_name)
+        result = webapp_manager.update_screenshot_with_detection(
+            source_name, screenshot, detection_area, alert_name, confidence
+        )
         return result
     return None
 
@@ -563,3 +693,13 @@ def set_webapp_pause_state(paused):
     global webapp_manager
     if webapp_manager:
         webapp_manager.system_paused = paused
+
+def update_webapp_screenshot_with_detection(source_name, screenshot, detection_area=None, 
+                                           alert_name=None, confidence=0.0):
+    """Interface pour mettre à jour le screenshot avec détection"""
+    global webapp_manager
+    if webapp_manager:
+        return webapp_manager.update_screenshot_with_detection(
+            source_name, screenshot, detection_area, alert_name, confidence
+        )
+    return None
