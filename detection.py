@@ -136,228 +136,70 @@ def preprocess_image_for_detection(image, method='template'):
         log_error(f"Erreur prétraitement image: {e}")
         return image
 
-def advanced_template_matching(screenshot, template, threshold):
+def template_matching_multi_scale(screenshot, template, threshold, scales=None):
     """
-    Détection de template améliorée avec variations automatiques d'échelle et d'aspect ratio
-    Sans avoir besoin de configuration manuelle
+    Détection de template multi-échelle pour gérer les différences de taille
+    CORRIGÉ: Limites de scale plus strictes pour éviter les faux positifs
     """
     best_match = None
     best_confidence = 0
+    best_location = None
+    best_scale = 1.0
     
     template_h, template_w = template.shape[:2]
-    screenshot_h, screenshot_w = screenshot.shape[:2]
     
-    # Calculer automatiquement les échelles pertinentes basées sur les tailles
-    min_scale = max(0.5, min(50.0 / template_w, 50.0 / template_h))  # Template min 50px
-    max_scale = min(2.0, min(screenshot_w * 0.8 / template_w, screenshot_h * 0.8 / template_h))
-    
-    # Générer automatiquement des échelles adaptatives
-    # Plus de précision autour de 1.0, moins aux extrêmes
-    scales = []
-    
-    # Échelles fines autour de 1.0 (±30%)
-    for s in np.arange(0.7, 1.31, 0.05):
-        if min_scale <= s <= max_scale:
-            scales.append(s)
-    
-    # Échelles plus grossières pour les extrêmes
-    if min_scale < 0.7:
-        for s in np.arange(min_scale, 0.7, 0.1):
-            scales.append(s)
-    if max_scale > 1.3:
-        for s in np.arange(1.4, min(max_scale, 2.0) + 0.1, 0.1):
-            scales.append(s)
-    
-    # Variations d'aspect ratio automatiques (déformation commune dans les jeux)
-    aspect_ratios = [0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15]
-    
-    # Utiliser plusieurs méthodes de matching pour plus de robustesse
-    methods = [
-        (cv2.TM_CCOEFF_NORMED, 1.0),    # Méthode principale
-        (cv2.TM_CCORR_NORMED, 0.9),      # Méthode secondaire avec poids réduit
-    ]
-    
-    log_debug(f"Testing {len(scales)} scales x {len(aspect_ratios)} ratios = {len(scales) * len(aspect_ratios)} combinations")
+    # IMPORTANT: Limiter les échelles pour éviter les templates trop petits
+    if scales is None:
+        # NE PAS descendre en dessous de 0.8 pour éviter la perte de détails
+        scales = [0.8, 0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2]
     
     for scale in scales:
-        for aspect_ratio in aspect_ratios:
-            try:
-                # Calculer les nouvelles dimensions
-                new_w = int(template_w * scale * aspect_ratio)
-                new_h = int(template_h * scale)
-                
-                # Vérifications de sécurité
-                if new_w < 20 or new_h < 20:  # Minimum 20px
-                    continue
-                if new_w > screenshot_w * 0.9 or new_h > screenshot_h * 0.9:
-                    continue
-                
-                # Redimensionner le template avec interpolation de qualité
-                scaled_template = cv2.resize(template, (new_w, new_h), 
-                                            interpolation=cv2.INTER_LINEAR)
-                
-                # Essayer différentes méthodes de matching
-                for method, weight in methods:
-                    result = cv2.matchTemplate(screenshot, scaled_template, method)
-                    _, max_val, _, max_loc = cv2.minMaxLoc(result)
-                    
-                    # Appliquer le poids de la méthode
-                    weighted_confidence = max_val * weight
-                    
-                    if weighted_confidence > best_confidence:
-                        best_confidence = weighted_confidence
-                        best_match = {
-                            'confidence': max_val,  # Garder la confiance non pondérée pour le rapport
-                            'weighted_confidence': weighted_confidence,
-                            'location': max_loc,
-                            'scale': scale,
-                            'aspect_ratio': aspect_ratio,
-                            'template_size': (new_w, new_h),
-                            'method': method,
-                            'original_template_size': (template_w, template_h)
-                        }
-                
-            except Exception as e:
-                log_debug(f"Erreur test scale={scale:.2f}, ratio={aspect_ratio:.2f}: {e}")
+        try:
+            # Redimensionnement du template
+            new_w = int(template_w * scale)
+            new_h = int(template_h * scale)
+            
+            # IMPORTANT: Ne pas permettre des templates trop petits
+            if new_w < max(30, template_w * 0.5) or new_h < max(30, template_h * 0.5):
                 continue
+                
+            if new_w > screenshot.shape[1] or new_h > screenshot.shape[0]:
+                continue
+                
+            scaled_template = cv2.resize(template, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+            
+            # Template matching
+            result = cv2.matchTemplate(screenshot, scaled_template, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, max_loc = cv2.minMaxLoc(result)
+            
+            # NOUVEAU: Pénaliser les échelles extrêmes
+            scale_penalty = 1.0
+            if scale < 0.9 or scale > 1.1:
+                scale_penalty = 0.95  # Réduire légèrement la confiance pour les échelles extrêmes
+            
+            adjusted_confidence = max_val * scale_penalty
+            
+            if adjusted_confidence > best_confidence:
+                best_confidence = adjusted_confidence
+                best_location = max_loc
+                best_scale = scale
+                best_match = {
+                    'confidence': max_val,  # Garder la confiance originale
+                    'adjusted_confidence': adjusted_confidence,
+                    'location': max_loc,
+                    'scale': scale,
+                    'template_size': (new_w, new_h)
+                }
+                
+        except Exception as e:
+            log_debug(f"Erreur template matching à l'échelle {scale}: {e}")
+            continue
     
-    # Validation supplémentaire par comparaison de features
-    if best_match and best_match['confidence'] >= threshold * 0.8:
-        # Valider avec une méthode complémentaire
-        validation_score = validate_match_with_features(
-            screenshot, template, best_match, threshold
-        )
-        if validation_score > 0:
-            best_match['feature_validation'] = validation_score
-            best_match['confidence'] = min(1.0, best_match['confidence'] * (1 + validation_score * 0.2))
-    
-    return best_match if best_match and best_match['confidence'] >= threshold else None
-
-def validate_match_with_features(screenshot, template, match_result, threshold):
-    """
-    Validation supplémentaire d'un match en utilisant des features locales
-    Retourne un score de validation entre 0 et 1
-    """
-    try:
-        x, y = match_result['location']
-        w, h = match_result['template_size']
-        
-        # Extraire la région détectée
-        roi = screenshot[y:y+h, x:x+w]
-        
-        # Redimensionner le template à la même taille que le ROI pour comparaison
-        template_resized = cv2.resize(template, (w, h), interpolation=cv2.INTER_LINEAR)
-        
-        # Méthode 1: Comparaison d'histogrammes de couleur
-        hist_score = compare_color_histograms(roi, template_resized)
-        
-        # Méthode 2: Comparaison de gradients/contours
-        edge_score = compare_edge_patterns(roi, template_resized)
-        
-        # Méthode 3: Comparaison de la structure locale (SSIM simplifié)
-        structure_score = compare_local_structure(roi, template_resized)
-        
-        # Score combiné
-        validation_score = (hist_score * 0.3 + edge_score * 0.4 + structure_score * 0.3)
-        
-        log_debug(f"Validation scores - Hist: {hist_score:.2f}, Edge: {edge_score:.2f}, Structure: {structure_score:.2f}")
-        
-        return validation_score if validation_score > 0.5 else 0
-        
-    except Exception as e:
-        log_debug(f"Erreur validation features: {e}")
-        return 0
-
-def compare_color_histograms(img1, img2):
-    """Compare les histogrammes de couleur de deux images"""
-    try:
-        # Calculer les histogrammes pour chaque canal
-        hist1 = []
-        hist2 = []
-        
-        for i in range(3):  # BGR channels
-            hist1.append(cv2.calcHist([img1], [i], None, [32], [0, 256]))
-            hist2.append(cv2.calcHist([img2], [i], None, [32], [0, 256]))
-        
-        # Normaliser et comparer
-        scores = []
-        for h1, h2 in zip(hist1, hist2):
-            h1 = cv2.normalize(h1, h1).flatten()
-            h2 = cv2.normalize(h2, h2).flatten()
-            score = cv2.compareHist(h1, h2, cv2.HISTCMP_CORREL)
-            scores.append(max(0, score))  # Garder seulement les scores positifs
-        
-        return sum(scores) / len(scores)
-        
-    except Exception:
-        return 0
-
-def compare_edge_patterns(img1, img2):
-    """Compare les patterns de contours entre deux images"""
-    try:
-        # Convertir en niveaux de gris
-        gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
-        gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
-        
-        # Détecter les contours
-        edges1 = cv2.Canny(gray1, 50, 150)
-        edges2 = cv2.Canny(gray2, 50, 150)
-        
-        # Comparer la densité et distribution des contours
-        edge_density1 = np.sum(edges1 > 0) / edges1.size
-        edge_density2 = np.sum(edges2 > 0) / edges2.size
-        
-        # Score basé sur la similarité de densité
-        density_score = 1.0 - abs(edge_density1 - edge_density2) * 10
-        density_score = max(0, min(1, density_score))
-        
-        # Template matching sur les contours
-        if edges1.shape == edges2.shape:
-            result = cv2.matchTemplate(edges1, edges2, cv2.TM_CCOEFF_NORMED)
-            edge_match_score = result[0][0]
-        else:
-            edge_match_score = density_score
-        
-        return (density_score + edge_match_score) / 2
-        
-    except Exception:
-        return 0
-
-def compare_local_structure(img1, img2):
-    """Compare la structure locale des images (version simplifiée de SSIM)"""
-    try:
-        # Convertir en niveaux de gris
-        gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY).astype(np.float64)
-        gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY).astype(np.float64)
-        
-        # Calculer moyennes et variances
-        mu1 = cv2.GaussianBlur(gray1, (11, 11), 1.5)
-        mu2 = cv2.GaussianBlur(gray2, (11, 11), 1.5)
-        
-        mu1_sq = mu1 ** 2
-        mu2_sq = mu2 ** 2
-        mu1_mu2 = mu1 * mu2
-        
-        sigma1_sq = cv2.GaussianBlur(gray1 ** 2, (11, 11), 1.5) - mu1_sq
-        sigma2_sq = cv2.GaussianBlur(gray2 ** 2, (11, 11), 1.5) - mu2_sq
-        sigma12 = cv2.GaussianBlur(gray1 * gray2, (11, 11), 1.5) - mu1_mu2
-        
-        # Constantes pour la stabilité
-        c1 = 0.01 ** 2
-        c2 = 0.03 ** 2
-        
-        # SSIM
-        ssim = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / \
-               ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
-        
-        return np.mean(ssim)
-        
-    except Exception:
-        return 0
+    return best_match
 
 def check_multiple_templates(screenshot, template_paths, threshold, match_strategy="best"):
     """
-    Vérifie plusieurs templates avec la détection améliorée
+    Vérifie plusieurs templates et retourne le(s) meilleur(s) résultat(s)
     """
     if not template_paths:
         return None
@@ -379,8 +221,8 @@ def check_multiple_templates(screenshot, template_paths, threshold, match_strate
             if processed_template is None:
                 continue
             
-            # Utiliser la détection améliorée
-            match_result = advanced_template_matching(
+            # Template matching multi-échelle avec limites strictes
+            match_result = template_matching_multi_scale(
                 processed_screenshot, 
                 processed_template, 
                 threshold
@@ -391,10 +233,9 @@ def check_multiple_templates(screenshot, template_paths, threshold, match_strate
                 match_result['template_name'] = os.path.basename(template_path)
                 results.append(match_result)
                 
-                log_debug(f"Match trouvé: {template_path} "
-                         f"(conf: {match_result['confidence']:.3f}, "
-                         f"scale: {match_result['scale']:.2f}, "
-                         f"ratio: {match_result['aspect_ratio']:.2f})")
+                log_debug(f"Correspondance trouvée: {template_path} "
+                         f"(confiance: {match_result['confidence']:.3f}, "
+                         f"échelle: {match_result['scale']:.2f})")
                 
                 if match_strategy == "first":
                     break
@@ -421,6 +262,79 @@ def check_multiple_templates(screenshot, template_paths, threshold, match_strate
     else:
         log_warning(f"Stratégie de correspondance inconnue: {match_strategy}")
         return max(results, key=lambda x: x['confidence'])
+
+def save_detection_debug(screenshot, alert, match_result, detection_success):
+    """Sauvegarde les informations de debug pour une détection"""
+    if not DEBUG_SAVE_SCREENSHOTS:
+        return
+    
+    try:
+        ensure_directory_exists(DEBUG_SCREENSHOT_PATH)
+        
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        alert_name = alert.get('name', 'unknown').replace('!', '').replace(' ', '_')
+        status = "detected" if detection_success else "missed"
+        
+        screenshot_file = f"{DEBUG_SCREENSHOT_PATH}/{alert_name}_{timestamp}_{status}_screenshot.png"
+        cv2.imwrite(screenshot_file, screenshot)
+        
+        if detection_success and match_result and DEBUG_SHOW_DETECTION_AREAS:
+            marked_screenshot = screenshot.copy()
+            
+            matches_to_mark = []
+            if 'matches' in match_result:
+                matches_to_mark = match_result['matches']
+            else:
+                matches_to_mark = [match_result]
+            
+            for i, match in enumerate(matches_to_mark):
+                if 'location' in match:
+                    x, y = match['location']
+                    h, w = match['template_size']
+                    
+                    colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0)]
+                    color = colors[i % len(colors)]
+                    
+                    cv2.rectangle(marked_screenshot, (x, y), (x + w, y + h), color, 2)
+                    
+                    confidence = match.get('confidence', 0)
+                    template_name = match.get('template_name', 'unknown')
+                    scale = match.get('scale', 1.0)
+                    
+                    text = f"{template_name}: {confidence:.3f} (s:{scale:.2f})"
+                    cv2.putText(marked_screenshot, text, (x, y-10), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                
+                marked_file = f"{DEBUG_SCREENSHOT_PATH}/{alert_name}_{timestamp}_marked.png"
+                cv2.imwrite(marked_file, marked_screenshot)
+        
+        # Sauvegarde des métadonnées
+        metadata_file = f"{DEBUG_SCREENSHOT_PATH}/{alert_name}_{timestamp}_metadata.txt"
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            f.write(f"Alert: {alert.get('name', 'N/A')}\n")
+            f.write(f"Timestamp: {timestamp}\n")
+            f.write(f"Detection: {detection_success}\n")
+            f.write(f"Threshold: {alert.get('threshold', 'N/A')}\n")
+            
+            if match_result:
+                if 'matches' in match_result:
+                    f.write(f"Multiple matches: {match_result['match_count']}\n")
+                    for i, match in enumerate(match_result['matches']):
+                        f.write(f"  Match {i+1}:\n")
+                        f.write(f"    Template: {match.get('template_name', 'N/A')}\n")
+                        f.write(f"    Confidence: {match.get('confidence', 'N/A')}\n")
+                        f.write(f"    Scale: {match.get('scale', 'N/A')}\n")
+                else:
+                    f.write(f"Template: {match_result.get('template_name', 'N/A')}\n")
+                    f.write(f"Confidence: {match_result.get('confidence', 'N/A')}\n")
+                    f.write(f"Scale: {match_result.get('scale', 'N/A')}\n")
+            
+            f.write(f"Screenshot shape: {screenshot.shape}\n")
+        
+        log_debug(f"Debug détection sauvé: {alert_name}_{timestamp}")
+        
+    except Exception as e:
+        log_error(f"Erreur sauvegarde debug détection: {e}")
 
 def check_for_alert(screenshot, alert, return_confidence=False, return_area=False):
     """
@@ -459,15 +373,15 @@ def check_for_alert(screenshot, alert, return_confidence=False, return_area=Fals
 
             match_strategy = alert.get('match_strategy', 'best')
             
-            # NOUVEAU: Obtenir le seuil ajusté basé sur l'apprentissage
+            # Obtenir le seuil ajusté basé sur l'apprentissage
             original_threshold = alert['threshold']
             adjusted_threshold = get_adjusted_threshold(alert_name, original_threshold)
             
-            # Utiliser la détection améliorée
+            # Vérification de plusieurs templates
             match_result = check_multiple_templates(
                 screenshot, 
                 template_paths, 
-                adjusted_threshold,  # Utiliser le seuil ajusté
+                adjusted_threshold,
                 match_strategy
             )
             
@@ -484,7 +398,6 @@ def check_for_alert(screenshot, alert, return_confidence=False, return_area=Fals
                             'x': x, 'y': y, 'width': w, 'height': h,
                             'match_count': match_result['match_count'],
                             'scale': best_match.get('scale', 1.0),
-                            'aspect_ratio': best_match.get('aspect_ratio', 1.0),
                             'strategy': 'all'
                         }
                 
@@ -498,18 +411,14 @@ def check_for_alert(screenshot, alert, return_confidence=False, return_area=Fals
                         detection_area = {
                             'x': x, 'y': y, 'width': w, 'height': h,
                             'template': matched_template,
-                            'scale': match_result.get('scale', 1.0),
-                            'aspect_ratio': match_result.get('aspect_ratio', 1.0),
-                            'feature_validation': match_result.get('feature_validation', 0)
+                            'scale': match_result.get('scale', 1.0)
                         }
                 
-                # NOUVEAU: Vérifier si cette détection ressemble à un faux positif connu
+                # Vérifier si cette détection ressemble à un faux positif connu
                 if confidence >= adjusted_threshold and detection_area:
-                    # Extraire la région détectée
                     x, y = detection_area['x'], detection_area['y']
                     w, h = detection_area['width'], detection_area['height']
                     
-                    # S'assurer que les coordonnées sont valides
                     if (x >= 0 and y >= 0 and 
                         x + w <= screenshot.shape[1] and 
                         y + h <= screenshot.shape[0]):
@@ -519,8 +428,7 @@ def check_for_alert(screenshot, alert, return_confidence=False, return_area=Fals
                         detection_params = {
                             'confidence': confidence,
                             'threshold': adjusted_threshold,
-                            'scale': detection_area.get('scale', 1.0),
-                            'aspect_ratio': detection_area.get('aspect_ratio', 1.0)
+                            'scale': detection_area.get('scale', 1.0)
                         }
                         
                         # Filtrer si ça ressemble à un faux positif connu
@@ -528,19 +436,16 @@ def check_for_alert(screenshot, alert, return_confidence=False, return_area=Fals
                             log_info(f"Détection filtrée (faux positif probable): {alert_name}")
                             confidence *= 0.5  # Réduire drastiquement la confiance
                 
-                # Décider si c'est une détection valide
                 detection_success = confidence >= adjusted_threshold
                 
                 if detection_success:
                     log_debug(f"Detection {alert_name}: "
-                             f"conf={confidence:.3f}, "
-                             f"seuil original={original_threshold:.3f}, "
-                             f"seuil ajusté={adjusted_threshold:.3f}, "
-                             f"template={matched_template}")
+                             f"conf={confidence:.3f}, seuil={adjusted_threshold:.3f}, "
+                             f"template={matched_template}, scale={detection_area.get('scale', 1.0):.2f}")
                 
             alert["history"].append(confidence)
 
-        # Méthode OCR (reste identique)
+        # Méthode OCR
         elif 'ocr' in alert:
             try:
                 processed_screenshot = preprocess_image_for_detection(screenshot, 'ocr')
@@ -622,19 +527,16 @@ def check_for_alert(screenshot, alert, return_confidence=False, return_area=Fals
             return (0.0, None) if return_confidence else (False, None)
         return 0.0 if return_confidence else False
 
-# Les autres fonctions restent identiques...
 def validate_detection_setup():
     """Valide la configuration de détection"""
     issues = []
     
-    # Vérification de Tesseract
     try:
         pytesseract.get_tesseract_version()
         log_debug("Tesseract OCR disponible")
     except Exception as e:
         issues.append(f"Tesseract OCR non disponible: {e}")
     
-    # Vérification des templates
     from config import ALERTS, get_alert_images
     total_templates = 0
     
@@ -667,7 +569,6 @@ def validate_detection_setup():
             log_warning(f"Validation détection: {issue}")
     else:
         log_info(f"Configuration de détection validée - {total_templates} templates chargés")
-        log_info("Détection améliorée activée: variations automatiques d'échelle et aspect ratio")
     
     return len(issues) == 0, issues
 
@@ -696,100 +597,8 @@ def clear_template_cache():
     detection_stats.template_cache.clear()
     log_debug("Cache des templates vidé")
 
-# Garder save_detection_debug identique à l'original
-def save_detection_debug(screenshot, alert, match_result, detection_success):
-    """Sauvegarde les informations de debug pour une détection"""
-    if not DEBUG_SAVE_SCREENSHOTS:
-        return
-    
-    try:
-        ensure_directory_exists(DEBUG_SCREENSHOT_PATH)
-        
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        alert_name = alert.get('name', 'unknown').replace('!', '').replace(' ', '_')
-        status = "detected" if detection_success else "missed"
-        
-        screenshot_file = f"{DEBUG_SCREENSHOT_PATH}/{alert_name}_{timestamp}_{status}_screenshot.png"
-        cv2.imwrite(screenshot_file, screenshot)
-        
-        if detection_success and match_result and DEBUG_SHOW_DETECTION_AREAS:
-            marked_screenshot = screenshot.copy()
-            
-            matches_to_mark = []
-            if 'matches' in match_result:
-                matches_to_mark = match_result['matches']
-            else:
-                matches_to_mark = [match_result]
-            
-            for i, match in enumerate(matches_to_mark):
-                if 'location' in match:
-                    x, y = match['location']
-                    h, w = match['template_size']
-                    
-                    # Couleur différente pour chaque correspondance
-                    colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0)]
-                    color = colors[i % len(colors)]
-                    
-                    # Rectangle de détection
-                    cv2.rectangle(marked_screenshot, (x, y), (x + w, y + h), color, 2)
-                    
-                    # Texte avec infos détaillées
-                    confidence = match.get('confidence', 0)
-                    scale = match.get('scale', 1.0)
-                    ratio = match.get('aspect_ratio', 1.0)
-                    template_name = match.get('template_name', 'unknown')
-                    
-                    # Afficher les infos de transformation
-                    text1 = f"{template_name}: {confidence:.3f}"
-                    text2 = f"S:{scale:.2f} R:{ratio:.2f}"
-                    
-                    cv2.putText(marked_screenshot, text1, (x, y-10), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-                    cv2.putText(marked_screenshot, text2, (x, y-30), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-                
-                marked_file = f"{DEBUG_SCREENSHOT_PATH}/{alert_name}_{timestamp}_marked.png"
-                cv2.imwrite(marked_file, marked_screenshot)
-        
-        # Sauvegarde des métadonnées avec les nouvelles infos
-        metadata_file = f"{DEBUG_SCREENSHOT_PATH}/{alert_name}_{timestamp}_metadata.txt"
-        with open(metadata_file, 'w', encoding='utf-8') as f:
-            f.write(f"Alert: {alert.get('name', 'N/A')}\n")
-            f.write(f"Timestamp: {timestamp}\n")
-            f.write(f"Detection: {detection_success}\n")
-            f.write(f"Threshold: {alert.get('threshold', 'N/A')}\n")
-            f.write(f"Match Strategy: {alert.get('match_strategy', 'best')}\n")
-            
-            if match_result:
-                if 'matches' in match_result:  # Stratégie "all"
-                    f.write(f"Multiple matches: {match_result['match_count']}\n")
-                    for i, match in enumerate(match_result['matches']):
-                        f.write(f"  Match {i+1}:\n")
-                        f.write(f"    Template: {match.get('template_name', 'N/A')}\n")
-                        f.write(f"    Confidence: {match.get('confidence', 'N/A')}\n")
-                        f.write(f"    Location: {match.get('location', 'N/A')}\n")
-                        f.write(f"    Scale: {match.get('scale', 'N/A')}\n")
-                        f.write(f"    Aspect Ratio: {match.get('aspect_ratio', 'N/A')}\n")
-                        f.write(f"    Feature Validation: {match.get('feature_validation', 'N/A')}\n")
-                else:  # Stratégies "best" ou "first"
-                    f.write(f"Template: {match_result.get('template_name', 'N/A')}\n")
-                    f.write(f"Confidence: {match_result.get('confidence', 'N/A')}\n")
-                    f.write(f"Location: {match_result.get('location', 'N/A')}\n")
-                    f.write(f"Scale: {match_result.get('scale', 'N/A')}\n")
-                    f.write(f"Aspect Ratio: {match_result.get('aspect_ratio', 'N/A')}\n")
-                    f.write(f"Feature Validation: {match_result.get('feature_validation', 'N/A')}\n")
-                    f.write(f"Original Template Size: {match_result.get('original_template_size', 'N/A')}\n")
-                    f.write(f"Matched Template Size: {match_result.get('template_size', 'N/A')}\n")
-            
-            f.write(f"Screenshot shape: {screenshot.shape}\n")
-        
-        log_debug(f"Debug détection sauvé: {alert_name}_{timestamp}")
-        
-    except Exception as e:
-        log_error(f"Erreur sauvegarde debug détection: {e}")
-
 def get_multi_image_performance():
-    """Retourne les performances par image utilisée avec infos de transformation"""
+    """Retourne les performances par image utilisée"""
     performance = {}
     
     for alert_name, images_stats in detection_stats.multi_image_stats.items():
@@ -810,169 +619,3 @@ def get_multi_image_performance():
             }
     
     return performance
-
-def benchmark_detection_methods(screenshot, iterations=100):
-    """
-    Benchmark des méthodes de détection avec la nouvelle approche
-    """
-    if screenshot is None:
-        log_error("Screenshot requis pour le benchmark")
-        return None
-    
-    log_info(f"Benchmark détection améliorée démarré ({iterations} itérations)")
-    
-    from config import ALERTS
-    results = {}
-    
-    for alert in ALERTS:
-        if not alert.get('enabled', True):
-            continue
-            
-        alert_name = alert['name']
-        
-        if 'imgs' in alert or 'img' in alert:
-            method = 'template_adaptive'
-            images_count = len(get_alert_images(alert))
-        elif 'ocr' in alert:
-            method = 'ocr'
-            images_count = 0
-        else:
-            continue
-        
-        times = []
-        confidences = []
-        scales_used = []
-        ratios_used = []
-        
-        log_debug(f"Benchmark {alert_name} ({method}, {images_count} images)...")
-        
-        for i in range(iterations):
-            start_time = time.time()
-            
-            try:
-                result = check_for_alert(screenshot, alert, return_confidence=True, return_area=True)
-                
-                if isinstance(result, tuple):
-                    confidence, area = result
-                else:
-                    confidence = result
-                    area = None
-                
-                duration = (time.time() - start_time) * 1000
-                
-                times.append(duration)
-                confidences.append(confidence)
-                
-                if area:
-                    scales_used.append(area.get('scale', 1.0))
-                    ratios_used.append(area.get('aspect_ratio', 1.0))
-                
-            except Exception as e:
-                log_error(f"Erreur benchmark {alert_name} iteration {i}: {e}")
-                continue
-        
-        if times:
-            results[alert_name] = {
-                'method': method,
-                'images_count': images_count,
-                'iterations': len(times),
-                'avg_time_ms': sum(times) / len(times),
-                'min_time_ms': min(times),
-                'max_time_ms': max(times),
-                'avg_confidence': sum(confidences) / len(confidences),
-                'max_confidence': max(confidences),
-                'detections': sum(1 for c in confidences if c >= alert.get('threshold', 0.5)),
-                'avg_scale': sum(scales_used) / len(scales_used) if scales_used else 1.0,
-                'avg_ratio': sum(ratios_used) / len(ratios_used) if ratios_used else 1.0,
-                'scale_variations': len(set(scales_used)) if scales_used else 0,
-                'ratio_variations': len(set(ratios_used)) if ratios_used else 0
-            }
-            
-            log_info(f"Benchmark {alert_name}: "
-                    f"{results[alert_name]['avg_time_ms']:.1f}ms avg, "
-                    f"{results[alert_name]['detections']} détections, "
-                    f"scale moyen: {results[alert_name]['avg_scale']:.2f}, "
-                    f"ratio moyen: {results[alert_name]['avg_ratio']:.2f}")
-    
-    return results
-
-def optimize_detection_thresholds(screenshot, alerts, test_iterations=50):
-    """
-    Optimise automatiquement les seuils de détection avec la nouvelle méthode
-    """
-    log_info("Optimisation des seuils avec détection adaptative...")
-    
-    optimized_alerts = []
-    
-    for alert in alerts:
-        if not alert.get('enabled', True) or not ('imgs' in alert or 'img' in alert):
-            optimized_alerts.append(alert)
-            continue
-        
-        original_threshold = alert['threshold']
-        confidences = []
-        successful_params = []
-        
-        for i in range(test_iterations):
-            try:
-                result = check_for_alert(screenshot, alert, return_confidence=True, return_area=True)
-                
-                if isinstance(result, tuple):
-                    confidence, area = result
-                else:
-                    confidence = result
-                    area = None
-                
-                confidences.append(confidence)
-                
-                if area and confidence > 0:
-                    successful_params.append({
-                        'scale': area.get('scale', 1.0),
-                        'ratio': area.get('aspect_ratio', 1.0),
-                        'confidence': confidence
-                    })
-                    
-            except:
-                continue
-        
-        if confidences:
-            avg_confidence = sum(confidences) / len(confidences)
-            max_confidence = max(confidences)
-            
-            # Analyse des paramètres de transformation réussis
-            if successful_params:
-                avg_scale = sum(p['scale'] for p in successful_params) / len(successful_params)
-                avg_ratio = sum(p['ratio'] for p in successful_params) / len(successful_params)
-                
-                log_info(f"Paramètres moyens pour {alert['name']}: "
-                        f"scale={avg_scale:.2f}, ratio={avg_ratio:.2f}")
-            
-            # Stratégie d'optimisation conservative
-            # Prendre en compte les variations de transformation
-            variation_penalty = 0.05 if len(successful_params) > 1 else 0
-            suggested_threshold = min(max_confidence * 0.8, avg_confidence * 0.9) - variation_penalty
-            
-            # S'assurer que le nouveau seuil n'est pas trop bas
-            suggested_threshold = max(suggested_threshold, 0.3)
-            
-            if abs(suggested_threshold - original_threshold) > 0.05:
-                alert_copy = alert.copy()
-                alert_copy['threshold'] = suggested_threshold
-                alert_copy['original_threshold'] = original_threshold
-                
-                # Ajouter les paramètres de transformation optimaux si trouvés
-                if successful_params:
-                    alert_copy['optimal_scale'] = avg_scale
-                    alert_copy['optimal_ratio'] = avg_ratio
-                
-                log_info(f"Seuil optimisé pour {alert['name']}: "
-                        f"{original_threshold:.3f} -> {suggested_threshold:.3f}")
-                
-                optimized_alerts.append(alert_copy)
-            else:
-                optimized_alerts.append(alert)
-        else:
-            log_warning(f"Impossible d'optimiser {alert['name']}: aucune donnée")
-            optimized_alerts.append(alert)
-    
-    return optimized_alerts

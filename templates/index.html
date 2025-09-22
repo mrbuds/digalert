@@ -7,34 +7,41 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
+        /* Mode nuit permanent */
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
+            color: #e0e0e0;
         }
         
         .dashboard-container {
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(30, 30, 40, 0.95);
             border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
             backdrop-filter: blur(10px);
             margin: 20px;
             padding: 30px;
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .status-card {
-            background: white;
+            background: rgba(40, 40, 50, 0.9);
             border-radius: 15px;
             padding: 20px;
             margin: 10px 0;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             transition: all 0.3s ease;
             border-left: 5px solid #007bff;
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
         
         .status-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            background: rgba(45, 45, 55, 0.95);
         }
         
         .status-card.success { border-left-color: #28a745; }
@@ -43,60 +50,252 @@
         .status-card.info { border-left-color: #17a2b8; }
         .status-card.secondary { border-left-color: #6c757d; }
         
+        /* Titres et textes */
+        h1, h2, h3, h4, h5 {
+            color: #ffffff;
+        }
+        
+        .text-muted {
+            color: #9a9a9a !important;
+        }
+        
+        /* Métriques */
         .metric-value {
             font-size: 2rem;
             font-weight: bold;
             margin-bottom: 5px;
+            color: #ffffff;
         }
         
         .metric-label {
-            color: #6c757d;
+            color: rgba(255, 255, 255, 0.7);
             font-size: 0.9rem;
             text-transform: uppercase;
             letter-spacing: 1px;
+            font-weight: 600;
         }
         
-        .alert-history {
-            max-height: 300px;
-            overflow-y: auto;
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 15px;
+        /* Badges */
+        .badge {
+            font-weight: 600;
         }
         
-        .alert-item {
-            background: white;
+        .badge.bg-success {
+            background: rgba(40, 167, 69, 0.2) !important;
+            color: #28a745;
+            border: 1px solid #28a745;
+        }
+        
+        .badge.bg-warning {
+            background: rgba(255, 193, 7, 0.2) !important;
+            color: #ffc107;
+            border: 1px solid #ffc107;
+        }
+        
+        .badge.bg-danger {
+            background: rgba(220, 53, 69, 0.2) !important;
+            color: #dc3545;
+            border: 1px solid #dc3545;
+        }
+        
+        .badge.bg-info {
+            background: rgba(23, 162, 184, 0.2) !important;
+            color: #17a2b8;
+            border: 1px solid #17a2b8;
+        }
+        
+        .badge.bg-secondary {
+            background: rgba(108, 117, 125, 0.2) !important;
+            color: #6c757d;
+            border: 1px solid #6c757d;
+        }
+        
+        /* Screenshots */
+        .screenshot-wrapper {
+            position: relative;
+            display: inline-block;
+            margin: 10px;
+        }
+        
+        .screenshot-img {
+            width: 200px;
+            height: 120px;
+            object-fit: contain;
+            border: 3px solid #333;
             border-radius: 8px;
-            padding: 10px 15px;
-            margin: 5px 0;
-            border-left: 4px solid #ffc107;
+            background: #1a1a2e;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .screenshot-img.has-detection {
+            border-color: #ffc107;
+            box-shadow: 0 0 15px rgba(255, 193, 7, 0.4);
+        }
+        
+        .screenshot-img:hover {
+            transform: scale(1.05);
+            border-color: #007bff;
+            box-shadow: 0 0 20px rgba(0, 123, 255, 0.4);
+        }
+        
+        /* Boutons de validation */
+        .validation-buttons {
+            position: absolute;
+            bottom: -10px;
+            right: -10px;
+            background: rgba(30, 30, 40, 0.95);
+            border-radius: 20px;
+            padding: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
             display: flex;
-            justify-content: space-between;
+            gap: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .btn-validate {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
             align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+            transition: all 0.2s ease;
         }
         
-        .alert-item.recent {
-            animation: pulse 2s infinite;
-            border-left-color: #dc3545;
+        .btn-validate.valid {
+            background: #28a745;
+            color: white;
         }
         
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+        .btn-validate.valid:hover {
+            background: #34ce57;
+            transform: scale(1.15);
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
         }
         
-        /* NOUVEAU: Styles pour les contrôles de pause */
+        .btn-validate.invalid {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-validate.invalid:hover {
+            background: #e74856;
+            transform: scale(1.15);
+            box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
+        }
+        
+        /* Badge de confiance */
+        .confidence-badge {
+            position: absolute;
+            top: -8px;
+            left: -8px;
+            background: rgba(20, 20, 30, 0.9);
+            color: #ffc107;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+        
+        /* Statistiques d'apprentissage */
+        .learning-stats {
+            background: linear-gradient(135deg, rgba(40, 40, 50, 0.9) 0%, rgba(30, 30, 40, 0.9) 100%);
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 30px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .learning-stats h4 {
+            margin-bottom: 20px;
+            color: #ffffff;
+        }
+        
+        .alert-stat-card {
+            background: rgba(50, 50, 60, 0.9);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: #e0e0e0;
+        }
+        
+        .alert-stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            background: rgba(55, 55, 65, 0.95);
+        }
+        
+        .stat-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            margin: 3px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        
+        .stat-badge.good {
+            background: rgba(40, 167, 69, 0.2);
+            color: #48d868;
+            border: 1px solid rgba(40, 167, 69, 0.5);
+        }
+        
+        .stat-badge.warning {
+            background: rgba(255, 193, 7, 0.2);
+            color: #ffd43b;
+            border: 1px solid rgba(255, 193, 7, 0.5);
+        }
+        
+        .stat-badge.bad {
+            background: rgba(220, 53, 69, 0.2);
+            color: #ff6b7d;
+            border: 1px solid rgba(220, 53, 69, 0.5);
+        }
+        
+        /* Feedback de validation */
+        .validation-toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 10px;
+            font-weight: bold;
+            color: white;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+        
+        .validation-toast.success {
+            background: linear-gradient(135deg, #28a745, #34ce57);
+        }
+        
+        .validation-toast.error {
+            background: linear-gradient(135deg, #dc3545, #e74856);
+        }
+        
+        /* Contrôles de pause */
         .pause-controls {
             position: fixed;
             top: 20px;
             left: 20px;
             z-index: 1000;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(30, 30, 40, 0.95);
             padding: 15px;
             border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
             backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .pause-btn {
@@ -109,21 +308,22 @@
             justify-content: center;
             font-size: 24px;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            cursor: pointer;
         }
         
         .pause-btn:hover {
             transform: scale(1.1);
-            box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.7);
         }
         
         .pause-btn.active {
-            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            background: linear-gradient(135deg, #dc3545, #c82333);
             color: white;
         }
         
         .pause-btn.inactive {
-            background: linear-gradient(135deg, #28a745, #20c997);
+            background: linear-gradient(135deg, #28a745, #218838);
             color: white;
         }
         
@@ -133,49 +333,18 @@
             font-weight: bold;
             text-transform: uppercase;
             letter-spacing: 1px;
+            color: #e0e0e0;
         }
         
         .pause-status.paused {
-            color: #dc3545;
+            color: #ff6b7d;
         }
         
         .pause-status.running {
-            color: #28a745;
+            color: #48d868;
         }
         
-        .system-paused-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(220, 53, 69, 0.1);
-            z-index: 100;
-            pointer-events: none;
-            display: none;
-        }
-        
-        .paused-indicator {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(220, 53, 69, 0.9);
-            color: white;
-            padding: 20px 40px;
-            border-radius: 15px;
-            font-size: 24px;
-            font-weight: bold;
-            z-index: 101;
-            display: none;
-            animation: pausePulse 2s infinite;
-        }
-        
-        @keyframes pausePulse {
-            0%, 100% { opacity: 0.8; }
-            50% { opacity: 1; }
-        }
-        
+        /* Statistiques en-tête */
         .header-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -184,244 +353,118 @@
         }
         
         .stat-box {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, rgba(40, 40, 50, 0.9) 0%, rgba(50, 50, 60, 0.9) 100%);
             color: white;
             padding: 20px;
             border-radius: 15px;
             text-align: center;
-        }
-        
-        .stat-box.paused {
-            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
-        }
-        
-        .update-indicator {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-        }
-        
-        .offline-indicator {
-            background: #dc3545;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
-            display: none;
-        }
-        
-        .online-indicator {
-            background: #28a745;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
-        }
-        
-        .screenshot-thumbnail {
-            width: 100px;
-            height: 60px;
-            object-fit: cover;
-            border-radius: 5px;
-            cursor: pointer;
-            border: 2px solid transparent;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
             transition: all 0.3s ease;
         }
         
-        .screenshot-thumbnail:hover {
-            border-color: #007bff;
-            transform: scale(1.05);
+        .stat-box:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
         }
         
-        .detection-area {
-            position: relative;
-            display: inline-block;
-        }
-        
-        .detection-badge {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background: #dc3545;
-            color: white;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .alerts-history-container {
-            max-height: 500px;
+        /* Historique des alertes */
+        .alert-history {
+            max-height: 300px;
             overflow-y: auto;
-            background: #f8f9fa;
+            background: rgba(40, 40, 50, 0.5);
             border-radius: 10px;
             padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
         
-        .alert-history-item {
-            background: white;
-            border-radius: 12px;
+        .alert-item {
+            background: rgba(50, 50, 60, 0.9);
+            border-radius: 8px;
+            padding: 10px 15px;
+            margin: 5px 0;
+            border-left: 4px solid #ffc107;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #e0e0e0;
+            transition: all 0.2s ease;
+        }
+        
+        .alert-item:hover {
+            background: rgba(55, 55, 65, 0.95);
+            transform: translateX(3px);
+        }
+        
+        .alert-item-with-validation {
+            background: rgba(50, 50, 60, 0.9);
+            border-radius: 10px;
             padding: 15px;
             margin: 10px 0;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-            border-left: 4px solid #dc3545;
-            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            color: #e0e0e0;
+            transition: all 0.2s ease;
         }
         
-        .alert-history-item:hover {
+        .alert-item-with-validation:hover {
+            background: rgba(55, 55, 65, 0.95);
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
         }
         
-        .alert-history-item.recent {
-            border-left-color: #ff4757;
-            animation: pulseAlert 3s infinite;
+        /* Scrollbar personnalisée */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
         }
         
-        @keyframes pulseAlert {
-            0% { background-color: white; }
-            50% { background-color: #fff5f5; }
-            100% { background-color: white; }
-        }
-        
-        .alert-screenshot {
-            width: 120px;
-            height: 80px;
-            object-fit: cover;
-            border-radius: 8px;
-            cursor: pointer;
-            border: 2px solid #ddd;
-            transition: all 0.3s ease;
-        }
-        
-        .alert-screenshot:hover {
-            border-color: #dc3545;
-            transform: scale(1.1);
-        }
-        
-        .alert-info {
-            flex: 1;
-            margin-left: 15px;
-        }
-        
-        .alert-title {
-            font-weight: bold;
-            color: #dc3545;
-            font-size: 1.1rem;
-            margin-bottom: 5px;
-        }
-        
-        .alert-source {
-            color: #6c757d;
-            font-size: 0.9rem;
-            margin-bottom: 5px;
-        }
-        
-        .alert-confidence {
-            background: #28a745;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            display: inline-block;
-        }
-        
-        .alert-time {
-            color: #6c757d;
-            font-size: 0.85rem;
-            text-align: right;
-        }
-        
-        .no-alerts-message {
-            text-align: center;
-            padding: 40px 20px;
-            color: #6c757d;
-        }
-        
-        .live-thumbnail {
-            opacity: 1;
-            transition: opacity 0.3s ease;
-        }
-        
-        .live-thumbnail.updating {
-            opacity: 0.7;
-        }
-
-        .detection-validation {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 5px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        
-        .validation-btn {
-            padding: 5px 10px;
-            margin: 0 2px;
-            border: none;
+        ::-webkit-scrollbar-track {
+            background: rgba(30, 30, 40, 0.5);
             border-radius: 5px;
-            cursor: pointer;
-            font-size: 12px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(100, 100, 120, 0.5);
+            border-radius: 5px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(120, 120, 140, 0.7);
+        }
+        
+        /* Inputs et boutons */
+        .form-control {
+            background: rgba(40, 40, 50, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+        }
+        
+        .form-control:focus {
+            background: rgba(45, 45, 55, 0.95);
+            border-color: #007bff;
+            color: #ffffff;
+            box-shadow: 0 0 10px rgba(0, 123, 255, 0.3);
+        }
+        
+        .btn {
             transition: all 0.3s ease;
         }
         
-        .validation-btn.valid {
-            background: #28a745;
-            color: white;
+        .btn-outline-danger {
+            color: #dc3545;
+            border-color: #dc3545;
         }
         
-        .validation-btn.invalid {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .validation-btn:hover {
-            transform: scale(1.1);
-        }
-        
-        .detection-box {
-            position: relative;
-            display: inline-block;
-        }
-        
-        .learning-stats {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 15px;
-            margin-top: 20px;
-        }
-        
-        .stat-badge {
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 15px;
-            margin: 2px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        
-        .stat-badge.good {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .stat-badge.warning {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .stat-badge.bad {
-            background: #f8d7da;
-            color: #721c24;
+        .btn-outline-danger:hover {
+            background: rgba(220, 53, 69, 0.2);
+            border-color: #e74856;
+            color: #ff6b7d;
+            box-shadow: 0 0 10px rgba(220, 53, 69, 0.3);
         }
     </style>
 </head>
 <body>
-    <!-- NOUVEAU: Contrôles de pause -->
+    <!-- Contrôles de pause -->
     <div class="pause-controls">
         <button id="pauseBtn" class="pause-btn inactive" onclick="togglePause()" title="Mettre en pause / Reprendre">
             <i class="fas fa-play"></i>
@@ -429,42 +472,29 @@
         <div id="pauseStatus" class="pause-status running">Actif</div>
     </div>
 
-    <!-- NOUVEAU: Overlay pour l'état de pause -->
-    <div id="systemPausedOverlay" class="system-paused-overlay">
-        <div class="paused-indicator">
-            <i class="fas fa-pause"></i> SYSTÈME EN PAUSE
-        </div>
-    </div>
-
-    <div class="update-indicator">
-        <div id="connection-status" class="online-indicator">
-            <i class="fas fa-wifi"></i> En ligne
-        </div>
-    </div>
-
     <div class="container-fluid">
         <div class="dashboard-container">
             <!-- En-tête -->
             <div class="text-center mb-4">
                 <h1 class="display-4">🎮 Last War Alerts</h1>
-                <p class="lead">Système de détection temps réel</p>
+                <p class="lead">Système de détection temps réel avec apprentissage</p>
             </div>
             
             <!-- Statistiques globales -->
             <div class="header-stats">
-                <div class="stat-box" id="uptimeBox">
+                <div class="stat-box">
                     <div class="metric-value" id="uptime">00:00:00</div>
                     <div class="metric-label">Temps de fonctionnement</div>
                 </div>
-                <div class="stat-box" id="cyclesBox">
+                <div class="stat-box">
                     <div class="metric-value" id="total-cycles">0</div>
                     <div class="metric-label">Cycles exécutés</div>
                 </div>
-                <div class="stat-box" id="reconnectionsBox">
+                <div class="stat-box">
                     <div class="metric-value" id="obs-reconnections">0</div>
-                    <div class="metric-label">Reconnexions OBS</div>
+                    <div class="metric-label">Reconnexions</div>
                 </div>
-                <div class="stat-box" id="alertsBox">
+                <div class="stat-box">
                     <div class="metric-value" id="total-alerts">0</div>
                     <div class="metric-label">Alertes détectées</div>
                 </div>
@@ -481,57 +511,21 @@
                 
                 <!-- Historique des alertes -->
                 <div class="col-lg-5">
-                    <div class="row">
-                        <!-- Alertes récentes (texte seulement) -->
-                        <div class="col-12 mb-4">
-                            <h4><i class="fas fa-bell"></i> Alertes Récentes</h4>
-                            <div class="alert-history" id="alerts-history">
-                                <div class="text-center text-muted">
-                                    <i class="fas fa-clock fa-2x mb-3"></i>
-                                    <p>Aucune alerte récente</p>
-                                </div>
-                            </div>
+                    <h4><i class="fas fa-bell"></i> Alertes Récentes</h4>
+                    <div class="alert-history" id="alerts-history">
+                        <div class="text-center text-muted">
+                            <i class="fas fa-clock fa-2x mb-3"></i>
+                            <p>Aucune alerte récente</p>
                         </div>
-                        
-                        <!-- Historique avec screenshots -->
-                        <div class="col-12">
-                            <h4><i class="fas fa-camera"></i> Historique avec Screenshots</h4>
-                            <div class="alerts-history-container" id="alerts-history-screenshots">
-                                <div class="no-alerts-message">
-                                    <i class="fas fa-images fa-3x mb-3"></i>
-                                    <p>Aucune alerte avec screenshot</p>
-                                    <small class="text-muted">Les alertes détectées avec leurs screenshots apparaîtront ici</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="text-center mt-3">
-                        <button class="btn btn-outline-danger" onclick="resetStats()">
-                            <i class="fas fa-trash"></i> Réinitialiser
-                        </button>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Modal pour agrandir les screenshots -->
-    <div class="modal fade" id="screenshotModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="screenshotModalTitle">Screenshot</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body text-center">
-                    <img id="screenshotModalImage" class="img-fluid" alt="Screenshot" style="max-height: 70vh;">
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
-                    <button type="button" class="btn btn-primary" onclick="downloadScreenshot()">
-                        <i class="fas fa-download"></i> Télécharger
-                    </button>
+            
+            <!-- Section statistiques d'apprentissage -->
+            <div id="learning-stats" class="learning-stats" style="display: none;">
+                <h4><i class="fas fa-brain"></i> Apprentissage automatique</h4>
+                <div id="learning-stats-content">
+                    <!-- Contenu généré dynamiquement -->
                 </div>
             </div>
         </div>
@@ -539,112 +533,8 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
     <script>
-        let isOnline = true;
-        let lastUpdate = Date.now();
-        let currentScreenshotUrl = '';
-        let lastAlertHistoryCount = 0;
-        let systemPaused = false; // NOUVEAU: État de pause local
-        
-        // NOUVEAU: Fonction pour basculer pause/reprise
-        function togglePause() {
-            fetch('/api/toggle_pause', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        updatePauseUI(data.paused);
-                        showNotification('Contrôle Système', data.message);
-                    } else {
-                        console.error('Erreur toggle pause:', data.error);
-                        showNotification('Erreur', 'Impossible de changer l\'état de pause');
-                    }
-                })
-                .catch(error => {
-                    console.error('Erreur toggle pause:', error);
-                    showNotification('Erreur', 'Problème de communication avec le serveur');
-                });
-        }
-        
-        // NOUVEAU: Met à jour l'interface selon l'état de pause
-        function updatePauseUI(paused) {
-            systemPaused = paused;
-            const pauseBtn = document.getElementById('pauseBtn');
-            const pauseStatus = document.getElementById('pauseStatus');
-            const overlay = document.getElementById('systemPausedOverlay');
-            const pausedIndicator = overlay.querySelector('.paused-indicator');
-            
-            // Mise à jour du bouton
-            if (paused) {
-                pauseBtn.className = 'pause-btn active';
-                pauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
-                pauseBtn.title = 'Système en pause - Cliquer pour reprendre';
-                
-                pauseStatus.textContent = 'En Pause';
-                pauseStatus.className = 'pause-status paused';
-                
-                // Afficher l'overlay
-                overlay.style.display = 'block';
-                pausedIndicator.style.display = 'block';
-                
-                // Griser les statistiques
-                document.querySelectorAll('.stat-box').forEach(box => {
-                    box.classList.add('paused');
-                });
-                
-            } else {
-                pauseBtn.className = 'pause-btn inactive';
-                pauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-                pauseBtn.title = 'Système actif - Cliquer pour mettre en pause';
-                
-                pauseStatus.textContent = 'Actif';
-                pauseStatus.className = 'pause-status running';
-                
-                // Cacher l'overlay
-                overlay.style.display = 'none';
-                pausedIndicator.style.display = 'none';
-                
-                // Retirer le grisage
-                document.querySelectorAll('.stat-box').forEach(box => {
-                    box.classList.remove('paused');
-                });
-            }
-        }
-        
-        function updateData() {
-            fetch('/api/status')
-                .then(response => response.json())
-                .then(data => {
-                    updateGlobalStats(data.global_stats, data.uptime);
-                    updateSourcesStatus(data.windows_state);
-                    updateAlertsHistory(data.alerts_history);
-                    
-                    // NOUVEAU: Mettre à jour l'état de pause
-                    if (data.system_paused !== undefined && data.system_paused !== systemPaused) {
-                        updatePauseUI(data.system_paused);
-                    }
-                    
-                    lastUpdate = Date.now();
-                    updateConnectionStatus(true);
-                })
-                .catch(error => {
-                    console.error('Erreur de mise à jour:', error);
-                    updateConnectionStatus(false);
-                });
-            
-            fetch('/api/alerts/history')
-                .then(response => response.json())
-                .then(data => {
-                    updateAlertsWithScreenshots(data.alerts_with_screenshots);
-                })
-                .catch(error => {
-                    console.error('Erreur mise à jour historique:', error);
-                });
-        }
-        
-        function updateGlobalStats(globalStats, uptime) {
-            document.getElementById('uptime').textContent = uptime;
-            document.getElementById('total-cycles').textContent = globalStats.total_cycles || 0;
-            document.getElementById('obs-reconnections').textContent = globalStats.obs_reconnections || 0;
-        }
+        let systemPaused = false;
+        let validatedDetections = new Set();
         
         function updateSourcesStatus(windowsState) {
             const container = document.getElementById('sources-container');
@@ -652,71 +542,110 @@
             
             let totalAlerts = 0;
             
-            Object.values(windowsState).forEach(source => {
+            for (const [sourceName, source] of Object.entries(windowsState)) {
                 totalAlerts += source.total_detections || 0;
                 
                 const card = document.createElement('div');
-                card.className = `status-card ${source.status_color}`;
+                card.className = `status-card ${source.status_color || 'info'}`;
                 
-                let screenshotSection = '';
-                if (source.has_screenshot) {
-                    // Utiliser l'image marquée avec la zone de détection
-                    const imageUrl = source.has_detection ? 
-                        `/api/screenshot/${source.source_name}?marked=true&t=${Date.now()}` : 
-                        source.screenshot_url;
-                    
-                    screenshotSection = `
-                        <div class="col-md-3">
-                            <div class="detection-box">
-                                <img src="${imageUrl}" 
-                                    class="screenshot-thumbnail" 
-                                    onclick="showScreenshotModal('${source.source_name}', '${imageUrl}')"
-                                    alt="Capture ${source.source_name}">
-                                ${source.has_detection ? `
-                                    <div class="detection-validation">
-                                        <button class="validation-btn valid" 
-                                                onclick="validateDetection('${source.source_name}', '${source.last_alert_name}', true, ${source.last_confidence}, event)"
-                                                title="Détection correcte">
-                                            ✓
-                                        </button>
-                                        <button class="validation-btn invalid"
-                                                onclick="validateDetection('${source.source_name}', '${source.last_alert_name}', false, ${source.last_confidence}, event)"
-                                                title="Faux positif">
-                                            ✗
-                                        </button>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                    `;
-                }
+                const statusIcon = getStatusIcon(source.status);
+                const hasDetection = source.has_detection && source.last_alert_name && source.last_alert_name !== 'Aucune';
+                const confidenceColor = getConfidenceColor(source.last_confidence || 0);
                 
-                // Reste du code pour créer la carte...
+                // Construction complète de la carte
                 card.innerHTML = `
-                    <!-- Contenu de la carte avec screenshot section -->
-                    ${screenshotSection}
+                    <div class="row align-items-center">
+                        <div class="col-md-3">
+                            <h5 class="mb-1">${statusIcon} ${sourceName}</h5>
+                            <span class="badge bg-${source.status_color || 'secondary'}">${source.status || 'Inconnu'}</span>
+                        </div>
+                        
+                        <div class="col-md-2 text-center">
+                            <div class="metric-value" style="font-size: 1.2rem;">${source.last_capture_relative || 'Jamais'}</div>
+                            <div class="metric-label" style="color: #6c757d;">Dernière capture</div>
+                        </div>
+                        
+                        <div class="col-md-2 text-center">
+                            <div class="metric-value" style="font-size: 1.2rem; color: ${confidenceColor};">
+                                ${source.confidence_percent || '0.0%'}
+                            </div>
+                            <div class="metric-label" style="color: #6c757d;">Confiance</div>
+                        </div>
+                        
+                        <div class="col-md-2 text-center">
+                            <div class="metric-value" style="font-size: 1.2rem;">${source.total_detections || 0}</div>
+                            <div class="metric-label" style="color: #6c757d;">Détections</div>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            ${source.has_screenshot ? `
+                                <div class="text-center">
+                                    <img src="/api/screenshot/${sourceName}?marked=${hasDetection}&t=${Date.now()}" 
+                                        style="width: 150px; height: 90px; object-fit: contain; border: 2px solid ${hasDetection ? '#ffc107' : '#ddd'}; border-radius: 5px; cursor: pointer; background: #f8f9fa;"
+                                        onclick="window.open('/api/screenshot/${sourceName}?marked=true&t=${Date.now()}', '_blank')"
+                                        onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%2290%22><rect fill=%22%23f0f0f0%22 width=%22150%22 height=%2290%22/><text x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 fill=%22%23999%22>Pas de capture</text></svg>'"
+                                        alt="Screenshot ${sourceName}">
+                                    ${hasDetection ? `
+                                        <div style="margin-top: 5px;">
+                                            <span class="badge bg-warning">${source.last_alert_name}</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            ` : `
+                                <div class="text-center text-muted">
+                                    <i class="fas fa-image fa-2x"></i><br>
+                                    <small>Pas de capture</small>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                    
+                    ${source.last_error ? `
+                        <div class="mt-2">
+                            <small class="text-danger"><i class="fas fa-exclamation-triangle"></i> ${source.last_error}</small>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            Taux de succès: ${(source.success_rate || 0).toFixed(0)}% | 
+                            Notifications: ${source.notifications_sent || 0} | 
+                            Erreurs: ${source.error_count || 0}
+                        </small>
+                    </div>
                 `;
                 
                 container.appendChild(card);
-            });
+            }
             
             document.getElementById('total-alerts').textContent = totalAlerts;
         }
 
-        function validateDetection(sourceName, alertName, isValid, confidence, event) {
-            event.stopPropagation(); // Empêcher l'ouverture du modal
+        function validateDetection(sourceName, alertName, isValid, confidence, detectionId, event) {
+            event.stopPropagation();
+            
+            if (validatedDetections.has(detectionId)) {
+                return;
+            }
+            validatedDetections.add(detectionId);
+            
+            // Désactiver les boutons
+            const buttons = document.querySelectorAll(`#val_${detectionId} button`);
+            buttons.forEach(btn => btn.disabled = true);
+            
+            // Feedback visuel
+            const clickedBtn = event.target;
+            clickedBtn.style.transform = 'scale(1.2)';
             
             const detectionParams = {
                 confidence: confidence,
-                threshold: 0.7, // À adapter
+                threshold: 0.7,
                 timestamp: new Date().toISOString()
             };
             
             fetch('/api/validate_detection', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     source_name: sourceName,
                     alert_name: alertName,
@@ -727,222 +656,100 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showNotification('Validation enregistrée', data.message);
+                    showToast(isValid ? '✓ Validation enregistrée' : '✗ Faux positif enregistré', 
+                             isValid ? 'success' : 'error');
                     
-                    // Mettre à jour les statistiques affichées
-                    updateLearningStats(data.statistics);
+                    if (data.statistics) {
+                        updateLearningStats(data.statistics);
+                    }
                     
-                    // Effet visuel
-                    const btn = event.target;
-                    btn.style.background = isValid ? '#28a745' : '#dc3545';
-                    btn.style.transform = 'scale(1.2)';
+                    // Masquer les boutons progressivement
                     setTimeout(() => {
-                        btn.style.transform = 'scale(1)';
-                    }, 300);
+                        const valDiv = document.getElementById(`val_${detectionId}`);
+                        if (valDiv) {
+                            valDiv.style.opacity = '0.3';
+                        }
+                    }, 500);
                 }
             })
             .catch(error => {
                 console.error('Erreur validation:', error);
-                showNotification('Erreur', 'Impossible d\'enregistrer la validation');
+                showToast('Erreur lors de la validation', 'error');
+                buttons.forEach(btn => btn.disabled = false);
+                validatedDetections.delete(detectionId);
             });
         }
-
+        
         function updateLearningStats(stats) {
-            // Créer ou mettre à jour la section des statistiques d'apprentissage
-            let statsContainer = document.getElementById('learning-stats');
-            if (!statsContainer) {
-                // Créer la section si elle n'existe pas
-                const mainContainer = document.querySelector('.dashboard-container');
-                statsContainer = document.createElement('div');
-                statsContainer.id = 'learning-stats';
-                statsContainer.className = 'learning-stats';
-                mainContainer.appendChild(statsContainer);
+            const container = document.getElementById('learning-stats');
+            const content = document.getElementById('learning-stats-content');
+            
+            if (!stats || !stats.alerts || Object.keys(stats.alerts).length === 0) {
+                container.style.display = 'none';
+                return;
             }
             
-            let html = '<h4><i class="fas fa-brain"></i> Apprentissage automatique</h4>';
-            html += `<p>Total validations: ${stats.total_validations}</p>`;
+            container.style.display = 'block';
             
-            if (stats.alerts) {
-                html += '<div class="row">';
+            let html = `<p>Total validations: <strong>${stats.total_validations || 0}</strong></p>`;
+            html += '<div class="row">';
+            
+            for (const [alertName, alertStats] of Object.entries(stats.alerts)) {
+                const precision = alertStats.precision || 0;
+                let badgeClass = 'good';
+                if (precision < 70) badgeClass = 'bad';
+                else if (precision < 85) badgeClass = 'warning';
                 
-                for (const [alertName, alertStats] of Object.entries(stats.alerts)) {
-                    const precision = alertStats.precision || 0;
-                    let badgeClass = 'good';
-                    if (precision < 70) badgeClass = 'bad';
-                    else if (precision < 85) badgeClass = 'warning';
-                    
-                    html += `
-                        <div class="col-md-4 mb-2">
-                            <div class="alert-stat-card">
-                                <strong>${alertName}</strong><br>
-                                <span class="stat-badge ${badgeClass}">
-                                    Précision: ${precision.toFixed(1)}%
-                                </span>
-                                <small class="d-block">
-                                    ✓ ${alertStats.true_positives} | ✗ ${alertStats.false_positives}
+                html += `
+                    <div class="col-md-4">
+                        <div class="alert-stat-card">
+                            <h6>${alertName}</h6>
+                            <span class="stat-badge ${badgeClass}">
+                                Précision: ${precision.toFixed(1)}%
+                            </span>
+                            <div class="mt-2">
+                                <small>
+                                    ✓ ${alertStats.true_positives} | 
+                                    ✗ ${alertStats.false_positives}
                                 </small>
-                                ${alertStats.threshold_adjustment ? 
-                                    `<small class="text-info">Seuil ajusté: ${alertStats.threshold_adjustment.suggested_threshold.toFixed(3)}</small>` 
-                                    : ''}
                             </div>
+                            ${alertStats.threshold_adjustment ? 
+                                `<small class="text-info">Seuil: ${alertStats.threshold_adjustment.suggested_threshold.toFixed(3)}</small>` 
+                                : ''}
                         </div>
-                    `;
-                }
-                
-                html += '</div>';
+                    </div>`;
             }
             
-            statsContainer.innerHTML = html;
-        }
-
-        // Charger les stats d'apprentissage au démarrage
-        function loadLearningStats() {
-            fetch('/api/learning_statistics')
-                .then(response => response.json())
-                .then(stats => {
-                    updateLearningStats(stats);
-                })
-                .catch(error => {
-                    console.error('Erreur chargement stats apprentissage:', error);
-                });
+            html += '</div>';
+            content.innerHTML = html;
         }
         
-        function updateAlertsHistory(alerts) {
-            const container = document.getElementById('alerts-history');
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `validation-toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
             
-            if (alerts.length === 0) {
-                container.innerHTML = `
-                    <div class="text-center text-muted">
-                        <i class="fas fa-clock fa-2x mb-3"></i>
-                        <p>Aucune alerte récente</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            container.innerHTML = '';
-            
-            alerts.slice(-10).reverse().forEach(alert => {
-                const alertDiv = document.createElement('div');
-                const isRecent = (Date.now() - new Date(alert.timestamp)) < 30000;
-                alertDiv.className = `alert-item ${isRecent ? 'recent' : ''}`;
-                
-                const time = new Date(alert.timestamp).toLocaleTimeString();
-                
-                alertDiv.innerHTML = `
-                    <div>
-                        <strong>${alert.alert_name}</strong>
-                        <br>
-                        <small class="text-muted">${alert.source_name}</small>
-                    </div>
-                    <div class="text-end">
-                        <div class="text-success">${alert.confidence_percent}</div>
-                        <small class="text-muted">${time}</small>
-                    </div>
-                `;
-                
-                container.appendChild(alertDiv);
-            });
+            setTimeout(() => {
+                toast.style.animation = 'slideIn 0.3s ease reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 2000);
         }
         
-        function updateAlertsWithScreenshots(alertsWithScreenshots) {
-            const container = document.getElementById('alerts-history-screenshots');
-            
-            if (!alertsWithScreenshots || alertsWithScreenshots.length === 0) {
-                container.innerHTML = `
-                    <div class="no-alerts-message">
-                        <i class="fas fa-images fa-3x mb-3"></i>
-                        <p>Aucune alerte avec screenshot</p>
-                        <small class="text-muted">Les alertes détectées avec leurs screenshots apparaîtront ici</small>
-                    </div>
-                `;
-                return;
-            }
-            
-            if (alertsWithScreenshots.length > lastAlertHistoryCount && lastAlertHistoryCount > 0) {
-                showNotification('Nouvelle alerte détectée!', 'Une nouvelle alerte avec screenshot est disponible.');
-            }
-            lastAlertHistoryCount = alertsWithScreenshots.length;
-            
-            container.innerHTML = '';
-            
-            alertsWithScreenshots.slice().reverse().forEach(alert => {
-                const alertDiv = document.createElement('div');
-                const isRecent = (Date.now() - new Date(alert.timestamp)) < 60000;
-                alertDiv.className = `alert-history-item ${isRecent ? 'recent' : ''}`;
-                
-                const time = new Date(alert.timestamp).toLocaleTimeString();
-                const relativeTime = getRelativeTime(alert.timestamp);
-                
-                alertDiv.innerHTML = `
-                    <div class="d-flex align-items-start">
-                        <img src="${alert.screenshot_url}" 
-                             class="alert-screenshot" 
-                             onclick="showScreenshotModal('${alert.source_name} - ${alert.alert_name}', '${alert.screenshot_url}')"
-                             alt="Screenshot ${alert.alert_name}"
-                             loading="lazy">
-                        <div class="alert-info">
-                            <div class="alert-title">${alert.alert_name}</div>
-                            <div class="alert-source">
-                                <i class="fas fa-desktop"></i> ${alert.source_name}
-                            </div>
-                            <div class="mb-2">
-                                <span class="alert-confidence">${alert.confidence_percent}</span>
-                                ${alert.detection_area ? '<span class="badge bg-info ms-2">Zone détectée</span>' : ''}
-                            </div>
-                        </div>
-                        <div class="alert-time">
-                            <div>${time}</div>
-                            <small class="text-muted">${relativeTime}</small>
-                        </div>
-                    </div>
-                `;
-                
-                container.appendChild(alertDiv);
-            });
-        }
-        
-        function getRelativeTime(timestamp) {
-            const now = new Date();
-            const alertTime = new Date(timestamp);
-            const diffMs = now - alertTime;
-            const diffSeconds = Math.floor(diffMs / 1000);
-            const diffMinutes = Math.floor(diffSeconds / 60);
-            const diffHours = Math.floor(diffMinutes / 60);
-            
-            if (diffSeconds < 60) {
-                return `${diffSeconds}s`;
-            } else if (diffMinutes < 60) {
-                return `${diffMinutes}min`;
-            } else {
-                return `${diffHours}h`;
-            }
-        }
-        
-        function updateConnectionStatus(online) {
-            const indicator = document.getElementById('connection-status');
-            
-            if (online && !isOnline) {
-                indicator.className = 'online-indicator';
-                indicator.innerHTML = '<i class="fas fa-wifi"></i> En ligne';
-                isOnline = true;
-            } else if (!online && isOnline) {
-                indicator.className = 'offline-indicator';
-                indicator.innerHTML = '<i class="fas fa-wifi-slash"></i> Hors ligne';
-                indicator.style.display = 'block';
-                isOnline = false;
-            }
+        function enlargeScreenshot(sourceName, imgUrl) {
+            // Ouvrir l'image dans une nouvelle fenêtre ou modal
+            window.open(imgUrl, '_blank');
         }
         
         function getStatusIcon(status) {
-            switch(status) {
-                case 'OK': return '<i class="fas fa-check-circle text-success"></i>';
-                case 'ALERTE': return '<i class="fas fa-exclamation-circle text-warning"></i>';
-                case 'ERREUR': return '<i class="fas fa-times-circle text-danger"></i>';
-                case 'Instable': return '<i class="fas fa-question-circle text-info"></i>';
-                case 'PAUSE': return '<i class="fas fa-pause-circle text-secondary"></i>';
-                default: return '<i class="fas fa-circle text-secondary"></i>';
-            }
+            const icons = {
+                'OK': '<i class="fas fa-check-circle text-success"></i>',
+                'ALERTE': '<i class="fas fa-exclamation-triangle text-warning"></i>',
+                'ERREUR': '<i class="fas fa-times-circle text-danger"></i>',
+                'PAUSE': '<i class="fas fa-pause-circle text-secondary"></i>',
+                'Instable': '<i class="fas fa-question-circle text-info"></i>'
+            };
+            return icons[status] || '<i class="fas fa-circle"></i>';
         }
         
         function getConfidenceColor(confidence) {
@@ -951,97 +758,196 @@
             return '#dc3545';
         }
         
-        function getSuccessRateColor(rate) {
-            if (rate >= 90) return '#28a745';
-            if (rate >= 70) return '#ffc107';
-            return '#dc3545';
+        function updateData() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    // Mise à jour des stats globales
+                    document.getElementById('uptime').textContent = data.uptime || '00:00:00';
+                    document.getElementById('total-cycles').textContent = data.global_stats.total_cycles || 0;
+                    document.getElementById('obs-reconnections').textContent = data.global_stats.obs_reconnections || 0;
+                    
+                    // Mise à jour des sources
+                    updateSourcesStatus(data.windows_state);
+                    
+                    // Mise à jour historique alertes
+                    updateAlertsHistory(data.alerts_history);
+                })
+                .catch(error => console.error('Erreur mise à jour:', error));
+            
+            // Charger les stats d'apprentissage
+            fetch('/api/learning_statistics')
+                .then(response => response.json())
+                .then(stats => updateLearningStats(stats))
+                .catch(error => console.error('Erreur stats:', error));
         }
-        
-        function resetStats() {
-            if (confirm('Êtes-vous sûr de vouloir réinitialiser toutes les statistiques et l\'historique ?')) {
-                fetch('/api/reset_stats', { method: 'POST' })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            showNotification('Statistiques réinitialisées', 'Toutes les données ont été effacées.');
-                            updateData();
-                            lastAlertHistoryCount = 0;
-                        } else {
-                            alert('Erreur: ' + data.error);
-                        }
-                    })
-                    .catch(error => {
-                        alert('Erreur de communication: ' + error);
-                    });
-            }
-        }
-        
-        function showScreenshotModal(sourceName, screenshotUrl) {
-            const modal = new bootstrap.Modal(document.getElementById('screenshotModal'));
-            document.getElementById('screenshotModalTitle').textContent = `Screenshot - ${sourceName}`;
-            document.getElementById('screenshotModalImage').src = screenshotUrl;
-            currentScreenshotUrl = screenshotUrl;
-            modal.show();
-        }
-        
-        function downloadScreenshot() {
-            if (currentScreenshotUrl) {
-                const link = document.createElement('a');
-                link.href = currentScreenshotUrl;
-                link.download = `screenshot_${new Date().getTime()}.png`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }
-        }
-        
-        function showNotification(title, message) {
-            if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification(title, {
-                    body: message,
-                    icon: '/static/favicon.ico'
-                });
-            }
-        }
-        
-        // NOUVEAU: Raccourci clavier pour pause (Espace ou P)
-        document.addEventListener('keydown', function(event) {
-            // Éviter d'intercepter les touches dans les champs de saisie
-            if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+
+        function updateAlertsHistory(alerts) {
+            const container = document.getElementById('alerts-history');
+            
+            if (!alerts || alerts.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-muted">
+                        <i class="fas fa-clock fa-2x mb-3"></i>
+                        <p>Aucune alerte récente</p>
+                    </div>`;
                 return;
             }
             
-            if (event.code === 'Space' || event.code === 'KeyP') {
-                event.preventDefault();
-                togglePause();
-            }
-        });
+            container.innerHTML = '';
+            
+            // Afficher les 10 dernières alertes
+            alerts.slice(-10).reverse().forEach(alert => {
+                const div = document.createElement('div');
+                const alertId = alert.id || `${alert.source_name}_${Date.now()}`;
+                const isRecent = (Date.now() - new Date(alert.timestamp)) < 60000;
+                
+                div.className = 'alert-item-with-validation';
+                div.style.cssText = `
+                    background: white;
+                    border-radius: 10px;
+                    padding: 15px;
+                    margin: 10px 0;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                    ${isRecent ? 'border: 2px solid #ffc107;' : 'border: 1px solid #dee2e6;'}
+                `;
+                
+                let innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 15px;">`;
+                
+                // Screenshot si disponible
+                if (alert.screenshot_url) {
+                    innerHTML += `
+                        <div style="position: relative;">
+                            <img src="${alert.screenshot_url}" 
+                                style="width: 100px; height: 60px; object-fit: cover; border-radius: 5px; cursor: pointer;"
+                                onclick="window.open('${alert.screenshot_url}', '_blank')"
+                                alt="Screenshot">
+                            <div style="position: absolute; top: -5px; right: -5px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px;">
+                                ${alert.confidence_percent}
+                            </div>
+                        </div>`;
+                }
+                
+                // Infos de l'alerte
+                innerHTML += `
+                        <div style="flex: 1;">
+                            <strong>${alert.alert_name}</strong><br>
+                            <small class="text-muted">${alert.source_name}</small><br>
+                            <small class="text-muted">${new Date(alert.timestamp).toLocaleTimeString()}</small>
+                        </div>`;
+                
+                // Boutons de validation
+                if (!validatedAlerts.has(alertId)) {
+                    innerHTML += `
+                        <div id="val_btns_${alertId}" style="display: flex; gap: 5px;">
+                            <button onclick="validateHistoryDetection('${alert.source_name}', '${alert.alert_name}', true, ${alert.confidence}, '${alertId}')" 
+                                    style="width: 35px; height: 35px; border-radius: 50%; border: none; background: #28a745; color: white; cursor: pointer; font-weight: bold;"
+                                    title="Détection correcte">✓</button>
+                            <button onclick="validateHistoryDetection('${alert.source_name}', '${alert.alert_name}', false, ${alert.confidence}, '${alertId}')"
+                                    style="width: 35px; height: 35px; border-radius: 50%; border: none; background: #dc3545; color: white; cursor: pointer; font-weight: bold;"
+                                    title="Faux positif">✗</button>
+                        </div>`;
+                } else {
+                    innerHTML += `
+                        <div style="color: #6c757d;">
+                            <i class="fas fa-check-circle"></i> Validé
+                        </div>`;
+                }
+                
+                innerHTML += `</div>`;
+                
+                div.innerHTML = innerHTML;
+                container.appendChild(div);
+            });
+        }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            loadLearningStats();
-            setInterval(loadLearningStats, 30000); // Rafraîchir toutes les 30 secondes
-        });
+        // Nouvelle fonction pour valider depuis l'historique
+        function validateHistoryDetection(sourceName, alertName, isValid, confidence, alertId) {
+            if (validatedAlerts.has(alertId)) {
+                return;
+            }
+            validatedAlerts.add(alertId);
+            
+            const detectionParams = {
+                confidence: confidence,
+                threshold: 0.7,
+                timestamp: new Date().toISOString()
+            };
+            
+            // Masquer les boutons
+            const btnsDiv = document.getElementById(`val_btns_${alertId}`);
+            if (btnsDiv) {
+                btnsDiv.innerHTML = '<span style="color: #6c757d;"><i class="fas fa-spinner fa-spin"></i></span>';
+            }
+            
+            fetch('/api/validate_detection', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    source_name: sourceName,
+                    alert_name: alertName,
+                    is_valid: isValid,
+                    detection_params: detectionParams
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(isValid ? '✓ Validation enregistrée' : '✗ Faux positif enregistré', 
+                            isValid ? 'success' : 'error');
+                    
+                    if (data.statistics) {
+                        updateLearningStats(data.statistics);
+                    }
+                    
+                    // Remplacer par une icône de validation
+                    if (btnsDiv) {
+                        btnsDiv.innerHTML = '<span style="color: #28a745;"><i class="fas fa-check-circle"></i> Validé</span>';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Erreur validation:', error);
+                showToast('Erreur lors de la validation', 'error');
+                validatedAlerts.delete(alertId);
+                // Réafficher les boutons en cas d'erreur
+                updateData();
+            });
+        }
+        function togglePause() {
+            fetch('/api/toggle_pause', {method: 'POST'})
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        systemPaused = data.paused;
+                        updatePauseUI(data.paused);
+                        showToast(data.message, 'success');
+                    }
+                })
+                .catch(error => console.error('Erreur pause:', error));
+        }
+        
+        function updatePauseUI(paused) {
+            const btn = document.getElementById('pauseBtn');
+            const status = document.getElementById('pauseStatus');
+            
+            if (paused) {
+                btn.className = 'pause-btn active';
+                btn.innerHTML = '<i class="fas fa-pause"></i>';
+                status.textContent = 'En Pause';
+                status.className = 'pause-status paused';
+            } else {
+                btn.className = 'pause-btn inactive';
+                btn.innerHTML = '<i class="fas fa-play"></i>';
+                status.textContent = 'Actif';
+                status.className = 'pause-status running';
+            }
+        }
         
         // Démarrage
         updateData();
         setInterval(updateData, 2000);
-        
-        // Vérification de connexion
-        setInterval(() => {
-            if (Date.now() - lastUpdate > 10000) {
-                updateConnectionStatus(false);
-            }
-        }, 5000);
-        
-        // Demander permission pour les notifications
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission();
-        }
-        
-        // Afficher les instructions de raccourci au démarrage
-        setTimeout(() => {
-            showNotification('Interface prête', 'Utilisez ESPACE ou P pour mettre en pause/reprendre');
-        }, 2000);
     </script>
 </body>
 </html>
