@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, render_template, jsonify, request, send_file
+from flask import Flask, render_template, jsonify, request, send_file, make_response
 import json
 import time
 import threading
 from datetime import datetime, timedelta
 import os
 import cv2
+import tempfile
 import numpy as np
 from utils import log_error, log_debug, log_info, log_warning
-from learning_system import validate_detection, get_learning_statistics
+from config_manager import config_manager
+from simple_detection import detector
+from training_tool import training_tool
 
 class WebAppManager:
     """Gestionnaire de l'interface web avec historique des alertes"""
@@ -132,7 +135,18 @@ class WebAppManager:
                 'alert_name': alert_name,
                 'confidence': confidence
             }
-            
+
+            if alert_name and confidence > 0:
+                # Ajouter automatiquement à l'historique quand une détection est marquée
+                self.add_alert(
+                    source_name=source_name,
+                    alert_name=alert_name,
+                    confidence=confidence,
+                    screenshot=screenshot,
+                    detection_area=detection_area
+                )
+                log_info(f"Alerte ajoutée à l'historique depuis update_screenshot_with_detection")
+                
             log_debug(f"Screenshot mis à jour pour {source_name} (détection: {detection_area is not None})")
             
             return filename_marked
@@ -226,7 +240,75 @@ class WebAppManager:
             except Exception as e:
                 log_error(f"Erreur validation détection: {e}")
                 return jsonify({'success': False, 'error': str(e)})
-        
+
+        @self.app.route('/api/config/import_template', methods=['POST'])
+        def api_import_template():
+            """Importe un template depuis un fichier"""
+            try:
+                alert_name = request.form.get('alert_name')
+                file = request.files.get('file')
+                
+                if not alert_name or not file:
+                    return jsonify({'success': False, 'error': 'Paramètres manquants'})
+                
+                log_info(f"Import template pour {alert_name}: {file.filename}")
+                
+               
+                # Créer un fichier temporaire avec l'extension correcte
+                suffix = os.path.splitext(file.filename)[1] or '.png'
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
+                    file.save(tmp_file.name)
+                    tmp_path = tmp_file.name
+                
+                try:
+                    # Charger l'image
+                    image = cv2.imread(tmp_path)
+                    
+                    if image is not None:
+                        # Ajouter comme template
+                        template_id = config_manager.add_template(
+                            alert_name,
+                            image,
+                            source_name="import",
+                            threshold=0.7
+                        )
+                        
+                        log_info(f"Template créé avec ID: {template_id}")
+                        
+                        return jsonify({
+                            'success': True,
+                            'template_id': template_id,
+                            'message': f'Template {file.filename} importé'
+                        })
+                    else:
+                        return jsonify({
+                            'success': False, 
+                            'error': 'Image invalide ou format non supporté'
+                        })
+                finally:
+                    # Nettoyer le fichier temporaire
+                    if os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
+                        
+            except Exception as e:
+                log_error(f"Erreur import template: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({'success': False, 'error': str(e)})
+
+        @self.app.route('/api/scan_windows', methods=['POST'])
+        def api_scan_windows():
+            """Scanne les fenêtres disponibles"""
+            try:
+                # Retourner les sources actuellement configurées
+                sources = list(self.windows_state.keys())
+                return jsonify({
+                    'success': True,
+                    'windows': sources
+                })
+            except Exception as e:
+                return jsonify({'success': False, 'error': str(e)})
+
         @self.app.route('/api/learning_statistics')
         def api_learning_statistics():
             """API pour récupérer les statistiques d'apprentissage"""
@@ -290,6 +372,409 @@ class WebAppManager:
                 'alerts_with_screenshots': self.alerts_with_screenshots[-10:],
                 'latest_detections': self.latest_detections
             })
+
+        @self.app.route('/api/training/annotate', methods=['POST'])
+        def api_annotate_detection():
+            """API pour annoter manuellement une zone de détection"""
+            try:
+                from training_tool import training_tool
+                
+                data = request.json
+                source_name = data.get('source_name')
+                alert_name = data.get('alert_name')
+                bbox = data.get('bbox')  # {x, y, width, height}
+                
+                # Récupérer le screenshot actuel
+                if source_name in self.latest_screenshots:
+                    screenshot_data = self.latest_screenshots[source_name]
+                    screenshot_path = screenshot_data.get('screenshot_path_clean')
+                    
+                    if screenshot_path and os.path.exists(screenshot_path):
+                        screenshot = cv2.imread(screenshot_path)
+                        
+                        if screenshot is not None:
+                            # Ajouter l'annotation
+                            annotation_id = training_tool.add_annotation(
+                                source_name, 
+                                alert_name,
+                                screenshot,
+                                (bbox['x'], bbox['y'], bbox['width'], bbox['height']),
+                                confidence=1.0
+                            )
+                            
+                            if annotation_id:
+                                # NOUVEAU : Déclencher immédiatement une vérification
+                                # Importer le module de détection
+                                try:
+                                    from detection import check_alert_with_trained_templates
+                                    
+                                    # Vérifier immédiatement avec le nouveau template
+                                    result = check_alert_with_trained_templates(screenshot, alert_name, threshold=0.7)
+                                    
+                                    if result and result.get('found'):
+                                        # Simuler une alerte
+                                        self.add_alert(source_name, alert_name, result['confidence'], screenshot, {
+                                            'x': result['x'],
+                                            'y': result['y'],
+                                            'width': result['width'],
+                                            'height': result['height']
+                                        })
+                                        
+                                        log_info(f"Alerte déclenchée après annotation: {alert_name} sur {source_name}")
+                                        
+                                        # Mettre à jour l'état de la fenêtre
+                                        if source_name in self.windows_state:
+                                            self.windows_state[source_name]['last_alert_name'] = alert_name
+                                            self.windows_state[source_name]['last_alert_state'] = True
+                                            self.windows_state[source_name]['last_confidence'] = result['confidence']
+                                            self.windows_state[source_name]['total_detections'] += 1
+                                
+                                except Exception as e:
+                                    log_error(f"Erreur lors du test immédiat: {e}")
+                                
+                                # Récupérer les statistiques
+                                stats = training_tool.get_training_statistics()
+                                
+                                return jsonify({
+                                    'success': True,
+                                    'annotation_id': annotation_id,
+                                    'message': f"Zone annotée et testée pour {alert_name}",
+                                    'statistics': stats,
+                                    'immediate_detection': result is not None and result.get('found', False)
+                                })
+                
+                return jsonify({
+                    'success': False,
+                    'error': 'Screenshot non disponible'
+                })
+                
+            except Exception as e:
+                log_error(f"Erreur annotation: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({'success': False, 'error': str(e)})
+
+        @self.app.route('/api/training/annotations')
+        def api_get_annotations():
+            """Récupère toutes les annotations"""
+            try:
+                from training_tool import training_tool
+                
+                # Filtrer et formater les annotations pour l'affichage
+                annotations = []
+                for ann in training_tool.annotations['annotations']:
+                    annotations.append({
+                        'id': ann['id'],
+                        'timestamp': ann['timestamp'],
+                        'source_name': ann['source_name'],
+                        'alert_name': ann['alert_name'],
+                        'bbox': ann['bbox'],
+                        'confidence': ann.get('confidence', 1.0),
+                        'validated': ann.get('validated', True),
+                        'is_manual': ann.get('is_manual', False),
+                        'template_exists': os.path.exists(ann.get('template_path', ''))
+                    })
+                
+                return jsonify({
+                    'annotations': annotations,
+                    'total': len(annotations)
+                })
+            except Exception as e:
+                log_error(f"Erreur récupération annotations: {e}")
+                return jsonify({'error': str(e)})
+
+        @self.app.route('/api/training/annotation/<annotation_id>', methods=['DELETE'])
+        def api_delete_annotation(annotation_id):
+            """Supprime une annotation"""
+            try:
+                from training_tool import training_tool
+                
+                # Trouver et supprimer l'annotation
+                annotations = training_tool.annotations['annotations']
+                annotation_to_delete = None
+                
+                for i, ann in enumerate(annotations):
+                    if ann['id'] == annotation_id:
+                        annotation_to_delete = ann
+                        annotations.pop(i)
+                        break
+                
+                if annotation_to_delete:
+                    # Supprimer le fichier template associé
+                    template_path = annotation_to_delete.get('template_path')
+                    if template_path and os.path.exists(template_path):
+                        try:
+                            os.remove(template_path)
+                            log_info(f"Template supprimé: {template_path}")
+                        except Exception as e:
+                            log_error(f"Erreur suppression template: {e}")
+                    
+                    # Mettre à jour les templates par alerte
+                    alert_name = annotation_to_delete['alert_name']
+                    if alert_name in training_tool.annotations['templates']:
+                        training_tool.annotations['templates'][alert_name] = [
+                            t for t in training_tool.annotations['templates'][alert_name]
+                            if t.get('path') != template_path
+                        ]
+                    
+                    # Sauvegarder
+                    training_tool.save_annotations()
+                    
+                    # Retourner les nouvelles stats
+                    stats = training_tool.get_training_statistics()
+                    
+                    return jsonify({
+                        'success': True,
+                        'message': f"Annotation {annotation_id} supprimée",
+                        'statistics': stats
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Annotation non trouvée'
+                    })
+                    
+            except Exception as e:
+                log_error(f"Erreur suppression annotation: {e}")
+                return jsonify({'success': False, 'error': str(e)})
+
+        @self.app.route('/api/training/clear/<alert_name>', methods=['POST'])
+        def api_clear_alert_annotations(alert_name):
+            """Supprime toutes les annotations d'une alerte"""
+            try:
+                from training_tool import training_tool
+                
+                # Filtrer les annotations
+                annotations_to_keep = []
+                deleted_count = 0
+                
+                for ann in training_tool.annotations['annotations']:
+                    if ann['alert_name'] != alert_name:
+                        annotations_to_keep.append(ann)
+                    else:
+                        # Supprimer le template
+                        template_path = ann.get('template_path')
+                        if template_path and os.path.exists(template_path):
+                            try:
+                                os.remove(template_path)
+                            except:
+                                pass
+                        deleted_count += 1
+                
+                training_tool.annotations['annotations'] = annotations_to_keep
+                
+                # Vider les templates de cette alerte
+                if alert_name in training_tool.annotations['templates']:
+                    del training_tool.annotations['templates'][alert_name]
+                
+                # Sauvegarder
+                training_tool.save_annotations()
+                
+                return jsonify({
+                    'success': True,
+                    'deleted_count': deleted_count,
+                    'message': f"{deleted_count} annotations supprimées pour {alert_name}"
+                })
+                
+            except Exception as e:
+                log_error(f"Erreur suppression annotations alerte: {e}")
+                return jsonify({'success': False, 'error': str(e)})
+
+        @self.app.route('/api/training/statistics')
+        def api_training_statistics():
+            """Retourne les statistiques d'entraînement"""
+            try:
+                from training_tool import training_tool
+                stats = training_tool.get_training_statistics()
+                return jsonify(stats)
+            except Exception as e:
+                return jsonify({'error': str(e)})
+
+        @self.app.route('/api/training/templates/<alert_name>')
+        def api_get_alert_templates(alert_name):
+            """Retourne les templates entrainés pour une alerte"""
+            try:
+                from training_tool import training_tool
+                templates = training_tool.get_alert_templates(alert_name)
+                return jsonify({
+                    'alert_name': alert_name,
+                    'templates': templates,
+                    'count': len(templates)
+                })
+            except Exception as e:
+                return jsonify({'error': str(e)})
+
+        # Routes de configuration
+        @self.app.route('/api/config')
+        def api_get_config():
+            """Récupère la configuration complète"""
+            return jsonify(config_manager.config)
+
+        @self.app.route('/api/config/alert', methods=['POST'])
+        def api_add_alert():
+            """Ajoute une nouvelle alerte"""
+            data = request.json
+            alert_name = data.get('name')
+            threshold = data.get('threshold', 0.7)
+            
+            if config_manager.add_alert(alert_name, threshold):
+                return jsonify({'success': True, 'message': f'Alerte {alert_name} ajoutée'})
+            return jsonify({'success': False, 'error': 'Alerte déjà existante'})
+
+        @self.app.route('/api/config/alert/<alert_name>', methods=['DELETE'])
+        def api_delete_alert(alert_name):
+            """Supprime une alerte"""
+            if alert_name in config_manager.config["alerts"]:
+                del config_manager.config["alerts"][alert_name]
+                config_manager.save_config()
+                return jsonify({'success': True})
+            return jsonify({'success': False, 'error': 'Alerte non trouvée'})
+
+        @self.app.route('/api/config/alert/<alert_name>/toggle', methods=['POST'])
+        def api_toggle_alert(alert_name):
+            """Active/désactive une alerte"""
+            if alert_name in config_manager.config["alerts"]:
+                config_manager.config["alerts"][alert_name]["enabled"] = \
+                    not config_manager.config["alerts"][alert_name]["enabled"]
+                config_manager.save_config()
+                return jsonify({
+                    'success': True,
+                    'enabled': config_manager.config["alerts"][alert_name]["enabled"]
+                })
+            return jsonify({'success': False})
+
+        @self.app.route('/api/config/template', methods=['POST'])
+        def api_add_template_from_capture():
+            """Ajoute un template depuis la dernière capture"""
+            data = request.json
+            source_name = data.get('source_name')
+            alert_name = data.get('alert_name')
+            bbox = data.get('bbox')  # {x, y, width, height}
+            threshold = data.get('threshold')
+            
+            if not all([source_name, alert_name, bbox]):
+                return jsonify({'success': False, 'error': 'Paramètres manquants'})
+            
+            # Récupérer la dernière capture
+            if source_name in self.latest_screenshots:
+                screenshot_data = self.latest_screenshots[source_name]
+                screenshot_path = screenshot_data.get('screenshot_path_clean')
+                
+                if screenshot_path and os.path.exists(screenshot_path):
+                    import cv2
+                    screenshot = cv2.imread(screenshot_path)
+                    
+                    if screenshot is not None and bbox:
+                        # Convertir les valeurs en entiers (IMPORTANT!)
+                        x = int(bbox['x'])
+                        y = int(bbox['y'])
+                        w = int(bbox['width'])
+                        h = int(bbox['height'])
+                        
+                        # Vérifier les limites
+                        height, width = screenshot.shape[:2]
+                        
+                        # S'assurer que les coordonnées sont dans les limites
+                        x = max(0, min(x, width - 1))
+                        y = max(0, min(y, height - 1))
+                        w = min(w, width - x)
+                        h = min(h, height - y)
+                        
+                        # Vérifier la taille minimale
+                        if w < 20 or h < 20:
+                            return jsonify({
+                                'success': False, 
+                                'error': f'Zone trop petite: {w}x{h}px (minimum 20x20)'
+                            })
+                        
+                        # Extraire la région
+                        region = screenshot[y:y+h, x:x+w]
+                        
+                        # Ajouter le template
+                        template_id = config_manager.add_template(
+                            alert_name, 
+                            region, 
+                            source_name, 
+                            threshold
+                        )
+                        
+                        # Tester immédiatement
+                        from simple_detection import detector
+                        result = detector.check_alert(screenshot, alert_name, source_name)
+                        
+                        log_info(f"Template ajouté: {template_id} pour {alert_name}")
+                        
+                        return jsonify({
+                            'success': True,
+                            'template_id': template_id,
+                            'immediate_detection': result is not None and result.get('found', False)
+                        })
+                    else:
+                        return jsonify({'success': False, 'error': 'Screenshot invalide'})
+            
+            return jsonify({'success': False, 'error': 'Capture non disponible'})
+
+        @self.app.route('/api/config/template/<alert_name>/<template_id>', methods=['DELETE'])
+        def api_delete_template(alert_name, template_id):
+            """Supprime un template"""
+            if config_manager.remove_template(alert_name, template_id):
+                return jsonify({'success': True})
+            return jsonify({'success': False})
+
+        @self.app.route('/api/config/template/<alert_name>/<template_id>/threshold', methods=['POST'])
+        def api_update_template_threshold(alert_name, template_id):
+            """Met à jour le seuil d'un template avec prédiction"""
+            data = request.json
+            new_threshold = data.get('threshold')
+            test_with_last = data.get('test_with_last', False)
+            
+            if config_manager.update_template_threshold(alert_name, template_id, new_threshold):
+                response = {'success': True}
+                
+                # Si demandé, tester avec la dernière capture
+                if test_with_last:
+                    source_name = data.get('source_name')
+                    if source_name and source_name in self.latest_screenshots:
+                        screenshot_path = self.latest_screenshots[source_name].get('screenshot_path_clean')
+                        if screenshot_path and os.path.exists(screenshot_path):
+                            import cv2
+                            screenshot = cv2.imread(screenshot_path)
+                            
+                            from simple_detection import detector
+                            prediction = detector.test_threshold_change(
+                                screenshot, alert_name, template_id, new_threshold
+                            )
+                            response['prediction'] = prediction
+                
+                return jsonify(response)
+            
+            return jsonify({'success': False})
+
+        @self.app.route('/api/detection/false_positive', methods=['POST'])
+        def api_mark_false_positive():
+            """Marque une détection comme faux positif"""
+            data = request.json
+            source_name = data.get('source_name')
+            alert_name = data.get('alert_name')
+            
+            from simple_detection import detector
+            result = detector.mark_false_positive(source_name, alert_name)
+            
+            if result:
+                # Obtenir une recommandation de seuil
+                recommendation = config_manager.calculate_threshold_recommendation(
+                    {"stats": result["stats"]},
+                    result["confidence"]
+                )
+                
+                return jsonify({
+                    'success': True,
+                    'template_id': result['template_id'],
+                    'stats': result['stats'],
+                    'recommendation': recommendation
+                })
+            
+            return jsonify({'success': False, 'error': 'Détection non trouvée'})
     
     def format_windows_state(self):
         """Formate l'état des fenêtres pour l'API"""
@@ -330,19 +815,28 @@ class WebAppManager:
     
     def get_status_text(self, state):
         """Détermine le texte de statut"""
-        consecutive_failures = state.get('consecutive_failures', 0)
-        alert_state = state.get('last_alert_state', False)
-        
         if self.system_paused:
             return 'PAUSE'
-        elif consecutive_failures >= 5:
+        
+        # Si une capture récente existe (moins de 10 secondes), c'est OK
+        last_capture = state.get('last_capture_time')
+        if last_capture:
+            try:
+                from datetime import datetime
+                capture_time = datetime.strptime(last_capture, "%Y-%m-%d %H:%M:%S")
+                if (datetime.now() - capture_time).total_seconds() < 10:
+                    return 'OK'
+            except:
+                pass
+        
+        # Sinon, vérifier les erreurs
+        consecutive_failures = state.get('consecutive_failures', 0)
+        if consecutive_failures >= 5:
             return 'ERREUR'
-        elif alert_state:
-            return 'ALERTE'
         elif consecutive_failures > 0:
             return 'Instable'
-        else:
-            return 'OK'
+        
+        return 'OK'
     
     def get_status_color(self, state):
         """Détermine la couleur de statut"""
@@ -408,6 +902,20 @@ class WebAppManager:
     
     def add_alert(self, source_name, alert_name, confidence, screenshot=None, detection_area=None):
         """Ajoute une alerte à l'historique avec screenshot"""
+
+        import traceback
+        
+        # DEBUG : voir d'où vient l'appel
+        print(f"\n=== ADD_ALERT APPELÉ ===")
+        print(f"Source: {source_name}")
+        print(f"Alerte: {alert_name}")
+        print(f"Confidence: {confidence}")
+        print("Appelé depuis:")
+        for line in traceback.format_stack()[:-1]:
+            if "digalert" in line or "lastwar" in line:  # Adapter selon votre nom de projet
+                print(line.strip())
+        print("=====================\n")
+
         timestamp = datetime.now()
         
         # Alerte simple pour l'historique rapide

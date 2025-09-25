@@ -1,0 +1,161 @@
+<div class="alerts-history-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-3">
+        <h4 class="text-white">
+            <i class="fas fa-bell"></i> Historique des Alertes
+        </h4>
+        <div class="btn-group">
+            <button class="btn btn-sm btn-outline-light" onclick="window.app.alerts.exportHistory()" title="Exporter">
+                <i class="fas fa-download"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger" onclick="window.app.alerts.clearHistory()" title="Effacer">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    </div>
+    
+    <div class="alerts-history-container" id="alerts-history-list">
+        <!-- Contenu généré dynamiquement -->
+    </div>
+</div>
+
+<style>
+.alerts-history-section {
+    background: rgba(40, 40, 50, 0.9);
+    border-radius: 15px;
+    padding: 20px;
+    height: 100%;
+}
+
+.alerts-history-container {
+    max-height: 600px;
+    overflow-y: auto;
+    background: rgba(30, 30, 40, 0.5);
+    border-radius: 10px;
+    padding: 15px;
+}
+
+.alert-history-item {
+    background: rgba(50, 50, 60, 0.9);
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-left: 4px solid var(--warning);
+    transition: all 0.3s ease;
+}
+
+.alert-history-item:hover {
+    transform: translateX(5px);
+    background: rgba(55, 55, 65, 0.95);
+}
+
+.alert-history-item.recent {
+    border-left-color: var(--success);
+    animation: pulse 2s infinite;
+}
+
+.alert-history-item.validated {
+    opacity: 0.7;
+    border-left-color: var(--info);
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+}
+
+.alert-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.alert-name {
+    color: var(--warning);
+    font-size: 1.1em;
+}
+
+.alert-time {
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.alert-details {
+    margin-bottom: 10px;
+}
+
+.alert-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.alert-screenshot-thumb {
+    width: 80px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 5px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.alert-screenshot-thumb:hover {
+    border-color: var(--primary);
+    transform: scale(1.1);
+}
+
+.validation-buttons {
+    display: flex;
+    gap: 5px;
+}
+
+.template-info {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.alert-stats-summary {
+    background: rgba(60, 60, 70, 0.9);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stat-mini {
+    padding: 10px;
+}
+
+.stat-mini .stat-value {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: var(--primary);
+}
+
+.stat-mini .stat-label {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+/* Scrollbar personnalisée */
+.alerts-history-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.alerts-history-container::-webkit-scrollbar-track {
+    background: rgba(30, 30, 40, 0.5);
+    border-radius: 4px;
+}
+
+.alerts-history-container::-webkit-scrollbar-thumb {
+    background: rgba(100, 100, 120, 0.5);
+    border-radius: 4px;
+}
+
+.alerts-history-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(120, 120, 140, 0.7);
+}
+</style>

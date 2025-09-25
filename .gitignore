@@ -1,7 +1,6 @@
 *.png
-!DIG.png
-!egg.png
+!alert_templates/*.png
 *.log
-*.json
+alert_statistics.json
 __pycache__
 .DS_Store

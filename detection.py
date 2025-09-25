@@ -197,13 +197,77 @@ def template_matching_multi_scale(screenshot, template, threshold, scales=None):
     
     return best_match
 
+def check_alert_with_trained_templates(screenshot, alert_name, threshold=0.7):
+    """
+    Vérifie d'abord les templates entraînés manuellement
+    """
+    try:
+        from training_tool import training_tool
+        
+        # Récupérer les templates annotés pour cette alerte
+        trained_templates = training_tool.get_alert_templates(alert_name, min_confidence=0.7)
+        
+        if trained_templates:
+            log_debug(f"Utilisation de {len(trained_templates)} templates entraînés pour {alert_name}")
+            
+            best_match = None
+            best_confidence = 0
+            
+            for template_path in trained_templates:
+                if not os.path.exists(template_path):
+                    continue
+                    
+                template = cv2.imread(template_path)
+                if template is None:
+                    continue
+                
+                # Essayer le template matching
+                result = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
+                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+                
+                if max_val > best_confidence:
+                    best_confidence = max_val
+                    h, w = template.shape[:2]
+                    best_match = {
+                        'confidence': max_val,
+                        'location': max_loc,
+                        'size': (w, h),
+                        'template_path': template_path
+                    }
+            
+            if best_match and best_match['confidence'] >= threshold:
+                log_info(f"Match trouvé avec template entraîné: {alert_name} (confiance: {best_match['confidence']:.2f})")
+                return {
+                    'found': True,
+                    'confidence': best_match['confidence'],
+                    'x': best_match['location'][0],
+                    'y': best_match['location'][1],
+                    'width': best_match['size'][0],
+                    'height': best_match['size'][1],
+                    'method': 'trained_template'
+                }
+    
+    except Exception as e:
+        log_debug(f"Erreur vérification templates entraînés: {e}")
+    
+    return None
+
 def check_multiple_templates(screenshot, template_paths, threshold, match_strategy="best"):
     """
     Vérifie plusieurs templates et retourne le(s) meilleur(s) résultat(s)
+    Inclut les templates entraînés manuellement
     """
     if not template_paths:
         return None
     
+    # NOUVEAU : Ajouter les templates entraînés
+    alert_name = None  # Vous devrez passer cette info
+    if alert_name:
+        trained_templates = load_trained_templates(alert_name)
+        if trained_templates:
+            template_paths = list(template_paths) + trained_templates
+            log_debug(f"Utilisation de {len(trained_templates)} templates entraînés en plus")
+
     processed_screenshot = preprocess_image_for_detection(screenshot, 'template')
     if processed_screenshot is None:
         return None
@@ -336,196 +400,149 @@ def save_detection_debug(screenshot, alert, match_result, detection_success):
     except Exception as e:
         log_error(f"Erreur sauvegarde debug détection: {e}")
 
-def check_for_alert(screenshot, alert, return_confidence=False, return_area=False):
+def check_for_alert(screenshot, alert_name, source_name=None):
     """
-    Détection d'alerte avec système d'apprentissage intégré
+    Vérifie la présence d'une alerte en utilisant le système de templates unifié
+    
+    Args:
+        screenshot: Image capturée (numpy array)
+        alert_name: Nom de l'alerte à détecter
+        source_name: Nom de la source (fenêtre)
+    
+    Returns:
+        Dict avec les infos de détection si trouvé, None sinon
     """
-    start_time = time.time()
+    if screenshot is None:
+        return None
     
     try:
-        if screenshot is None:
-            log_debug("Screenshot null fourni à check_for_alert")
-            if return_area:
-                return (0.0, None) if return_confidence else (False, None)
-            return 0.0 if return_confidence else False
-
-        if not alert.get('enabled', True):
-            if return_area:
-                return (0.0, None) if return_confidence else (False, None)
-            return 0.0 if return_confidence else False
-
-        confidence = 0.0
-        detection_success = False
-        match_result = None
-        detection_area = None
-        matched_template = None
-        alert_name = alert.get('name', 'unknown')
-
-        # Détection par template matching
-        if 'imgs' in alert or 'img' in alert:
-            template_paths = get_alert_images(alert)
+        from config_manager import config_manager
+        from webapp import webapp_manager
+        
+        # Vérifier si l'alerte existe et est activée
+        if alert_name not in config_manager.config["alerts"]:
+            return None
+        
+        alert_config = config_manager.config["alerts"][alert_name]
+        if not alert_config.get("enabled", False):
+            return None
+        
+        templates = alert_config.get("templates", [])
+        if not templates:
+            return None
+        
+        best_match = None
+        best_confidence = 0.0
+        
+        # Essayer chaque template
+        for template_data in templates:
+            template_path = template_data.get("path", "")
             
-            if not template_paths:
-                log_error(f"Aucune image spécifiée pour {alert_name}")
-                if return_area:
-                    return (0.0, None) if return_confidence else (False, None)
-                return 0.0 if return_confidence else False
-
-            match_strategy = alert.get('match_strategy', 'best')
+            # Gérer différents formats de chemins
+            if template_path.startswith("/static/"):
+                template_path = template_path.replace("/static/", "static/")
+            elif template_path.startswith("/"):
+                template_path = template_path[1:]
             
-            # Obtenir le seuil ajusté basé sur l'apprentissage
-            original_threshold = alert['threshold']
-            adjusted_threshold = get_adjusted_threshold(alert_name, original_threshold)
+            # Vérifier si le fichier existe
+            if not os.path.exists(template_path):
+                possible_paths = [
+                    f"static/{template_path}",
+                    f"static/alert_templates/{os.path.basename(template_path)}",
+                    f"alert_templates/{os.path.basename(template_path)}"
+                ]
+                
+                found = False
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        template_path = path
+                        found = True
+                        break
+                
+                if not found:
+                    continue
             
-            # Vérification de plusieurs templates
-            match_result = check_multiple_templates(
-                screenshot, 
-                template_paths, 
-                adjusted_threshold,
-                match_strategy
-            )
+            # Charger le template
+            template_img = cv2.imread(template_path)
+            if template_img is None:
+                continue
             
-            if match_result:
-                if 'matches' in match_result:  # Stratégie "all"
-                    confidence = match_result['best_confidence']
-                    matched_template = f"Multiple ({match_result['match_count']})"
-                    
-                    best_match = max(match_result['matches'], key=lambda x: x['confidence'])
-                    if 'location' in best_match:
-                        x, y = best_match['location']
-                        h, w = best_match['template_size']
-                        detection_area = {
-                            'x': x, 'y': y, 'width': w, 'height': h,
-                            'match_count': match_result['match_count'],
-                            'scale': best_match.get('scale', 1.0),
-                            'strategy': 'all'
-                        }
+            # Vérifier les dimensions
+            if template_img.shape[0] > screenshot.shape[0] or template_img.shape[1] > screenshot.shape[1]:
+                continue
+            
+            # Template matching
+            result = cv2.matchTemplate(screenshot, template_img, cv2.TM_CCOEFF_NORMED)
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+            
+            confidence = max_val
+            threshold = template_data.get("threshold", alert_config.get("threshold", 0.7))
+            
+            # Si la confiance est suffisante et meilleure que les précédentes
+            if confidence >= threshold and confidence > best_confidence:
+                h, w = template_img.shape[:2]
                 
-                else:  # Stratégies "best" ou "first"
-                    confidence = match_result['confidence']
-                    matched_template = match_result.get('template_name', 'unknown')
-                    
-                    if 'location' in match_result:
-                        x, y = match_result['location']
-                        h, w = match_result['template_size']
-                        detection_area = {
-                            'x': x, 'y': y, 'width': w, 'height': h,
-                            'template': matched_template,
-                            'scale': match_result.get('scale', 1.0)
-                        }
-                
-                # Vérifier si cette détection ressemble à un faux positif connu
-                if confidence >= adjusted_threshold and detection_area:
-                    x, y = detection_area['x'], detection_area['y']
-                    w, h = detection_area['width'], detection_area['height']
-                    
-                    if (x >= 0 and y >= 0 and 
-                        x + w <= screenshot.shape[1] and 
-                        y + h <= screenshot.shape[0]):
-                        
-                        screenshot_region = screenshot[y:y+h, x:x+w]
-                        
-                        detection_params = {
-                            'confidence': confidence,
-                            'threshold': adjusted_threshold,
-                            'scale': detection_area.get('scale', 1.0)
-                        }
-                        
-                        # Filtrer si ça ressemble à un faux positif connu
-                        if should_filter_detection(alert_name, screenshot_region, detection_params):
-                            log_info(f"Détection filtrée (faux positif probable): {alert_name}")
-                            confidence *= 0.5  # Réduire drastiquement la confiance
-                
-                detection_success = confidence >= adjusted_threshold
-                
-                if detection_success:
-                    log_debug(f"Detection {alert_name}: "
-                             f"conf={confidence:.3f}, seuil={adjusted_threshold:.3f}, "
-                             f"template={matched_template}, scale={detection_area.get('scale', 1.0):.2f}")
-                
-            alert["history"].append(confidence)
-
-        # Méthode OCR
-        elif 'ocr' in alert:
+                best_match = {
+                    'found': True,
+                    'alert_name': alert_name,
+                    'confidence': float(confidence),
+                    'x': int(max_loc[0]),
+                    'y': int(max_loc[1]),
+                    'width': int(w),
+                    'height': int(h),
+                    'template_id': template_data.get("id", "unknown")
+                }
+                best_confidence = confidence
+        
+        # Si un match a été trouvé
+        if best_match:
+            log_info(f"✓ Alerte détectée: {alert_name} sur {source_name} ({best_confidence:.1%})")
+            
+            # Enregistrer dans les statistiques
             try:
-                processed_screenshot = preprocess_image_for_detection(screenshot, 'ocr')
+                config_manager.record_detection(
+                    alert_name,
+                    best_match['template_id'],
+                    best_match['confidence']
+                )
+            except:
+                pass
+            
+            # Ajouter à l'historique web
+            try:
+                detection_area = {
+                    'x': best_match['x'],
+                    'y': best_match['y'],
+                    'width': best_match['width'],
+                    'height': best_match['height']
+                }
                 
-                ocr_config = alert.get('ocr_config', '--oem 3 --psm 6')
-                language = alert.get('language', 'fra')
-                
-                ocr_result = pytesseract.image_to_string(
-                    processed_screenshot, 
-                    lang=language, 
-                    config=ocr_config
+                webapp_manager.add_alert(
+                    source_name=source_name or "unknown",
+                    alert_name=alert_name,
+                    confidence=best_match['confidence'],
+                    screenshot=screenshot,
+                    detection_area=detection_area
                 )
                 
-                target_text = alert['ocr'].lower()
-                found_text = ocr_result.lower()
-                
-                if target_text in found_text:
-                    confidence = 1.0
-                    detection_success = True
-                    matched_template = "OCR"
-                    
-                    match_result = {
-                        'confidence': confidence,
-                        'ocr_result': ocr_result.strip(),
-                        'target_text': target_text
-                    }
-                    
-                    if detection_success:
-                        detection_area = {
-                            'x': 0, 'y': 0,
-                            'width': screenshot.shape[1],
-                            'height': screenshot.shape[0],
-                            'type': 'ocr'
-                        }
-                else:
-                    confidence = 0.0
-                
-                alert["history"].append(confidence)
+                # Mettre à jour l'état de la fenêtre
+                if source_name and source_name in webapp_manager.windows_state:
+                    webapp_manager.windows_state[source_name]['last_alert_name'] = alert_name
+                    webapp_manager.windows_state[source_name]['last_alert_state'] = True
+                    webapp_manager.windows_state[source_name]['last_confidence'] = best_match['confidence']
+                    webapp_manager.windows_state[source_name]['total_detections'] = \
+                        webapp_manager.windows_state[source_name].get('total_detections', 0) + 1
                 
             except Exception as e:
-                log_error(f"Erreur OCR pour {alert_name}: {e}")
-                confidence = 0.0
-                alert["history"].append(confidence)
+                log_error(f"Erreur ajout historique: {e}")
+            
+            return best_match
         
-        else:
-            log_error(f"Alerte {alert_name} n'a pas de méthode de détection valide")
-            if return_area:
-                return (0.0, None) if return_confidence else (False, None)
-            return 0.0 if return_confidence else False
-
-        # Statistiques
-        duration_ms = (time.time() - start_time) * 1000
-        detection_stats.add_detection(detection_success, confidence, duration_ms, 
-                                    alert_name, matched_template)
-        
-        # Debug si activé
-        if alert.get("debug", False) or DEBUG_SAVE_SCREENSHOTS:
-            save_detection_debug(screenshot, alert, match_result, detection_success)
-
-        log_debug(f"Détection {alert_name}: conf={confidence:.3f}, "
-                 f"success={detection_success}, duration={duration_ms:.1f}ms")
-
-        if return_area:
-            if return_confidence:
-                return confidence, detection_area
-            return detection_success, detection_area
-        
-        return confidence if return_confidence else detection_success
-
+        return None
+    
     except Exception as e:
-        duration_ms = (time.time() - start_time) * 1000
-        log_error(f"Erreur de détection ({alert.get('name', 'unknown')}): {e}")
-        detection_stats.add_detection(False, 0.0, duration_ms)
-        
-        if hasattr(alert, 'history'):
-            alert["history"].append(0.0)
-        
-        if return_area:
-            return (0.0, None) if return_confidence else (False, None)
-        return 0.0 if return_confidence else False
+        log_error(f"Erreur dans check_for_alert: {e}")
+        return None
 
 def validate_detection_setup():
     """Valide la configuration de détection"""
@@ -619,3 +636,21 @@ def get_multi_image_performance():
             }
     
     return performance
+
+def load_trained_templates(alert_name):
+    """Charge les templates entraînés manuellement"""
+    try:
+        from training_tool import training_tool
+        
+        # Récupérer les templates annotés
+        trained_templates = training_tool.get_alert_templates(alert_name, min_confidence=0.8)
+        
+        if trained_templates:
+            log_info(f"Chargé {len(trained_templates)} templates entraînés pour {alert_name}")
+            return trained_templates
+        
+    except Exception as e:
+        log_debug(f"Pas de templates entraînés pour {alert_name}: {e}")
+    
+    return []
+

@@ -1,0 +1,61 @@
+{
+  "validations": [
+    {
+      "timestamp": "2025-09-22T19:58:22.740216",
+      "alert_name": "Dig!",
+      "is_valid": true,
+      "confidence": 0.9219282269477844,
+      "scale": 1.0,
+      "aspect_ratio": 1.0,
+      "threshold": 0.7
+    },
+    {
+      "timestamp": "2025-09-22T20:02:21.364799",
+      "alert_name": "Dig!",
+      "is_valid": true,
+      "confidence": 0.8762999176979065,
+      "scale": 1.0,
+      "aspect_ratio": 1.0,
+      "threshold": 0.7
+    },
+    {
+      "timestamp": "2025-09-22T20:38:35.653117",
+      "alert_name": "Dig!",
+      "is_valid": true,
+      "confidence": 0.8571168780326843,
+      "scale": 1.0,
+      "aspect_ratio": 1.0,
+      "threshold": 0.7
+    },
+    {
+      "timestamp": "2025-09-22T20:38:41.173798",
+      "alert_name": "Dig!",
+      "is_valid": true,
+      "confidence": 0.91591477394104,
+      "scale": 1.0,
+      "aspect_ratio": 1.0,
+      "threshold": 0.7
+    },
+    {
+      "timestamp": "2025-09-22T22:04:18.874592",
+      "alert_name": "Dig!",
+      "is_valid": true,
+      "confidence": 0.9231103658676147,
+      "scale": 1.0,
+      "aspect_ratio": 1.0,
+      "threshold": 0.7
+    }
+  ],
+  "alert_stats": {
+    "Dig!": {
+      "true_positives": 5,
+      "false_positives": 0,
+      "avg_confidence_valid": 0.898874032497406,
+      "avg_confidence_invalid": 0,
+      "min_valid_confidence": 0.8571168780326843,
+      "max_invalid_confidence": 0.0
+    }
+  },
+  "threshold_adjustments": {},
+  "last_update": "2025-09-22T22:04:18.874592"
+}

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Main.py modifié pour utiliser la capture directe au lieu d'OBS
-Compatible avec les fenêtres cachées et minimisées
+Main.py modifié pour utiliser le système unifié de configuration
+Compatible avec l'interface web et config_manager
 """
 
 from win10toast import ToastNotifier
@@ -12,17 +12,21 @@ from queue import Queue
 from collections import defaultdict
 import json
 
-from config import ALERTS, COOLDOWN_PERIOD, CHECK_INTERVAL, WINDOW_RETRY_INTERVAL, SOURCE_WINDOWS
+# Import du système unifié
+from config_manager import config_manager
+from webapp import webapp_manager, init_webapp, start_webapp, update_webapp_data, stop_webapp, register_pause_callback, is_webapp_paused, set_webapp_pause_state, update_webapp_screenshot, update_webapp_screenshot_with_detection
+# Imports existants
+from config import CHECK_INTERVAL, WINDOW_RETRY_INTERVAL, SOURCE_WINDOWS
 from capture import (
     capture_window, initialize_capture_system, is_obs_connected, 
-    cleanup_capture_system, get_capture_statistics
+    cleanup_capture_system, get_capture_statistics, get_window_capture_info,
+    optimize_capture_method
 )
 from detection import check_for_alert, cleanup_template_cache_if_needed
-from webapp import (init_webapp, start_webapp, update_webapp_data, add_webapp_alert, 
-                   stop_webapp, update_webapp_screenshot, register_pause_callback, 
+from webapp import (init_webapp, start_webapp, update_webapp_data, 
+                   stop_webapp, register_pause_callback, 
                    is_webapp_paused, set_webapp_pause_state)
 from utils import log_error, log_info, log_debug
-
 
 # Variables globales pour la gestion de pause
 SYSTEM_PAUSED = False
@@ -113,7 +117,7 @@ class NotificationQueue:
             except Exception as e:
                 log_error(f"Erreur notification queue: {e}")
                 
-    def add_notification(self, title, message, duration=10):
+    def add_notification(self, title, message, duration=10, priority=5):
         try:
             self.queue.put({
                 'title': title,
@@ -145,27 +149,22 @@ class CaptureSystemManager:
             try:
                 log_info(f"🔌 Initialisation système de capture (tentative {attempt + 1}/{max_retries})")
                 
-                # Initialiser le système de capture directe
                 success = initialize_capture_system(SOURCE_WINDOWS)
                 
                 if success:
                     self.connected = True
                     self.reconnection_attempts = 0
                     log_info("✅ Système de capture directe initialisé")
-                    log_info("🎯 Fonctionnalités activées:")
-                    log_info("   • Capture de fenêtres minimisées/cachées")
-                    log_info("   • Pas de dépendance OBS")
-                    log_info("   • Méthodes de capture multiples avec fallback")
                     return True
                 else:
                     log_error(f"❌ Échec initialisation système capture (tentative {attempt + 1})")
                     time.sleep(2)
                     
             except Exception as e:
-                log_error(f"Erreur initialisation capture (tentative {attempt + 1}/{max_retries}): {e}")
+                log_error(f"Erreur initialisation capture: {e}")
                 time.sleep(2)
                 
-        log_error("❌ Impossible d'initialiser le système de capture après toutes les tentatives")
+        log_error("❌ Impossible d'initialiser le système de capture")
         return False
         
     def disconnect(self):
@@ -182,38 +181,74 @@ class CaptureSystemManager:
     def is_connected(self):
         """Vérifie l'état de connexion"""
         if self.connected:
-            # Vérification périodique de l'état
-            return is_obs_connected()  # Fonction de compatibilité
+            return is_obs_connected()
         return False
     
     def reconnect(self):
         """Tente une reconnexion"""
         if self.reconnection_attempts >= self.max_reconnection_attempts:
-            log_error(f"❌ Trop de tentatives de reconnexion ({self.reconnection_attempts})")
+            log_error(f"❌ Trop de tentatives de reconnexion")
             return False
         
         self.reconnection_attempts += 1
-        log_info(f"🔄 Reconnexion système capture (tentative {self.reconnection_attempts})")
+        log_info(f"🔄 Reconnexion système capture")
         
         self.disconnect()
         time.sleep(1)
         
         success = self.connect(max_retries=2)
         if success:
-            log_info("✅ Reconnexion système capture réussie")
-        else:
-            log_error("❌ Échec reconnexion système capture")
+            log_info("✅ Reconnexion réussie")
         
         return success
 
 
+def get_sources_from_webapp():
+    """Récupère les sources depuis webapp_manager ou utilise SOURCE_WINDOWS par défaut"""
+    try:
+        # Si webapp_manager existe et a windows_state
+        if webapp_manager and hasattr(webapp_manager, 'windows_state') and webapp_manager.windows_state:
+            sources = []
+            for source_name in webapp_manager.windows_state.keys():
+                # Trouver le titre de fenêtre correspondant
+                window_title = source_name  # Par défaut
+                for win in SOURCE_WINDOWS:
+                    if win["source_name"] == source_name:
+                        window_title = win["window_title"]
+                        break
+                
+                sources.append({
+                    "source_name": source_name,
+                    "window_title": window_title
+                })
+            return sources
+    except:
+        pass
+    
+    # Sinon, utiliser SOURCE_WINDOWS par défaut
+    return SOURCE_WINDOWS
+
+
 def main():
     notification_queue = NotificationQueue()
-    capture_manager = CaptureSystemManager()  # Remplace OBSManager
+    capture_manager = CaptureSystemManager()
 
-    # État par fenêtre avec statistiques étendues
+    # Initialisation de l'interface web EN PREMIER
+    webapp = init_webapp(port=5000, debug=False)
+    register_pause_callback(webapp_pause_callback)
+    start_webapp()
+    log_info("🌐 Interface web disponible sur http://localhost:5000")
+    
+    # Attendre un peu que webapp_manager soit initialisé
+    time.sleep(1)
+    
+    # MAINTENANT on peut récupérer les sources
+    initial_sources = get_sources_from_webapp()
+    
+    # État par fenêtre
     windows_state = {}
-    for win in SOURCE_WINDOWS:
+    
+    for win in initial_sources:
         source_name = win["source_name"]
         windows_state[source_name] = {
             "last_notification_time": 0,
@@ -230,71 +265,45 @@ def main():
             "last_error": None,
             "error_count": 0,
             "performance_ms": 0,
-            "notification_cooldown": win.get("notification_cooldown", COOLDOWN_PERIOD),
             "last_black_screen_notification": 0,
-            "window_title": win.get("window_title"),  # NOUVEAU: Garder référence titre fenêtre
-            "capture_method": win.get("capture_method", "auto")  # NOUVEAU: Méthode de capture
+            "window_title": win.get("window_title"),
+            "capture_method": win.get("capture_method", "auto")
         }
+        
+        # Ajouter un état par alerte pour les cooldowns
+        for alert_name in config_manager.config.get("alerts", {}).keys():
+            windows_state[source_name][f"last_{alert_name}_time"] = 0
 
     # Statistiques globales
     global_stats = {
         "start_time": time.time(),
         "total_cycles": 0,
-        "capture_reconnections": 0,  # Remplace obs_reconnections
+        "capture_reconnections": 0,
         "last_status_save": 0,
         "pause_count": 0,
         "total_paused_time": 0,
-        "capture_mode": "direct_capture"  # NOUVEAU: Mode de capture
+        "capture_mode": "direct_capture"
     }
 
     pause_start_time = None
 
     try:
-        # Initialisation de l'interface web
-        webapp = init_webapp(port=5000, debug=False)
-        
-        # Enregistrer le callback pour synchroniser les états de pause
-        register_pause_callback(webapp_pause_callback)
-        
-        start_webapp()
-        log_info("🌐 Interface web disponible sur http://localhost:5000")
-        
-        # Initialisation système de capture directe (remplace OBS)
+        # Initialisation système de capture
         if not capture_manager.connect():
-            log_error("❌ Impossible d'initialiser le système de capture. Arrêt du programme.")
-            log_error("💡 Vérifiez que les fenêtres cibles sont ouvertes:")
-            for win in SOURCE_WINDOWS:
-                log_error(f"   - {win['window_title']} (source: {win['source_name']})")
+            log_error("❌ Impossible d'initialiser le système de capture")
             return
 
         log_info("=== Démarrage du système de détection d'alertes ===")
-        log_info("🚀 Mode: Capture directe (sans OBS)")
-        log_info("💡 Contrôles disponibles:")
-        log_info("   - Interface web: bouton pause/reprise")
-        log_info("   - Raccourci web: ESPACE ou P")
+        log_info("🚀 Mode: Système unifié avec config_manager")
+        log_info(f"📊 {len(config_manager.config.get('alerts', {}))} alertes configurées")
+        log_info(f"🎯 {len(windows_state)} sources actives: {', '.join(windows_state.keys())}")
         
-        # Afficher les infos des fenêtres détectées
-        from capture import get_window_capture_info
-        log_info("\n📋 Fenêtres détectées:")
-        for win in SOURCE_WINDOWS:
-            window_info = get_window_capture_info(win['window_title'])
-            if window_info:
-                status_icons = []
-                if window_info['is_minimized']:
-                    status_icons.append("📦 Minimisée")
-                if not window_info['is_visible']:
-                    status_icons.append("👁️‍🗨️ Cachée")
-                if window_info['can_capture_hidden']:
-                    status_icons.append("✅ Capture OK")
-                
-                status_text = " | ".join(status_icons) if status_icons else "Normal"
-                
-                log_info(f"   🎯 {win['source_name']} ({win['window_title']})")
-                log_info(f"      Taille: {window_info['width']}x{window_info['height']}")
-                log_info(f"      Processus: {window_info['process_name']}")
-                log_info(f"      État: {status_text}")
-            else:
-                log_info(f"   ❌ {win['source_name']} ({win['window_title']}) - Non trouvée")
+        # Afficher les alertes actives
+        log_info("\n📋 Alertes configurées:")
+        for alert_name, alert_config in config_manager.config.get("alerts", {}).items():
+            if alert_config.get("enabled", False):
+                templates_count = len(alert_config.get("templates", []))
+                log_info(f"   ✅ {alert_name}: {templates_count} template(s), seuil: {alert_config.get('threshold', 0.7)}")
         
         while True:
             try:
@@ -307,14 +316,12 @@ def main():
                     if pause_start_time is None:
                         pause_start_time = current_time
                         global_stats["pause_count"] += 1
-                        log_info("⏸️ Système en pause - En attente de reprise...")
+                        log_info("⏸️ Système en pause")
                     
-                    # Pendant la pause, maintenir l'interface web
                     update_webapp_data(windows_state, global_stats)
                     time.sleep(1)
                     continue
                 else:
-                    # Si on sort de pause, calculer le temps de pause
                     if pause_start_time is not None:
                         pause_duration = current_time - pause_start_time
                         global_stats["total_paused_time"] += pause_duration
@@ -327,25 +334,51 @@ def main():
 
                 # Vérification système de capture
                 if not capture_manager.is_connected():
-                    log_error("❌ Système de capture déconnecté, tentative de reconnexion...")
+                    log_error("❌ Système de capture déconnecté")
                     if capture_manager.reconnect():
                         global_stats["capture_reconnections"] += 1
-                        log_info("✅ Reconnexion système capture réussie")
                     else:
-                        log_error("❌ Échec reconnexion système capture, attente...")
                         time.sleep(WINDOW_RETRY_INTERVAL)
                         continue
 
-                for win in SOURCE_WINDOWS:
+                # Récupérer les sources actuelles
+                current_sources = get_sources_from_webapp()
+                
+                for win in current_sources:
                     source_name = win["source_name"]
                     window_title = win["window_title"]
+                    
+                    # Créer l'état si nouvelle source
+                    if source_name not in windows_state:
+                        windows_state[source_name] = {
+                            "last_notification_time": 0,
+                            "last_alert_state": False,
+                            "last_alert_name": None,
+                            "last_capture_time": None,
+                            "last_confidence": 0.0,
+                            "consecutive_detections": 0,
+                            "consecutive_failures": 0,
+                            "total_captures": 0,
+                            "successful_captures": 0,
+                            "total_detections": 0,
+                            "notifications_sent": 0,
+                            "last_error": None,
+                            "error_count": 0,
+                            "performance_ms": 0,
+                            "last_black_screen_notification": 0,
+                            "window_title": window_title,
+                            "capture_method": "auto"
+                        }
+                        for alert_name in config_manager.config.get("alerts", {}).keys():
+                            windows_state[source_name][f"last_{alert_name}_time"] = 0
+                    
                     state = windows_state[source_name]
                     
                     capture_start = time.time()
                     state["total_captures"] += 1
 
                     try:
-                        # Capture directe (sans paramètre ws)
+                        # Capture
                         screenshot = capture_window(None, source_name, window_title)
                         capture_time = (time.time() - capture_start) * 1000
                         state["performance_ms"] = capture_time
@@ -354,140 +387,102 @@ def main():
                             state["consecutive_failures"] += 1
                             state["last_error"] = "Capture échouée"
                             state["error_count"] += 1
-                            log_debug(f"Capture échouée pour {source_name} (échecs consécutifs: {state['consecutive_failures']})")
-                            
-                            if state["consecutive_failures"] == 1:
-                                window_info = get_window_capture_info(window_title)
-                                if window_info:
-                                    log_debug(f"État fenêtre {source_name}:")
-                                    log_debug(f"   Visible: {window_info['is_visible']}")
-                                    log_debug(f"   Minimisée: {window_info['is_minimized']}")
-                                    log_debug(f"   Taille: {window_info['width']}x{window_info['height']}")
-                                else:
-                                    log_debug(f"Impossible d'obtenir infos fenêtre: {window_title}")
                             
                             if state["consecutive_failures"] >= 5:
-                                log_error(f"Trop d'échecs pour {source_name}, pause longue")
-                                
-                                if state["consecutive_failures"] == 5:
-                                    log_info(f"🔧 Tentative d'optimisation capture pour {source_name}")
-                                    from capture import optimize_capture_method
-                                    new_method = optimize_capture_method(source_name, window_title)
-                                    if new_method:
-                                        state["capture_method"] = new_method
-                                        log_info(f"✅ Méthode optimisée: {new_method}")
-                                
+                                log_error(f"Trop d'échecs pour {source_name}")
                                 time.sleep(WINDOW_RETRY_INTERVAL)
                             continue
 
-                        # INITIALISER LES VARIABLES ICI
+                        # Variables de détection
                         alert_detected = False
-                        current_alert = None
+                        current_alert_name = None
                         max_confidence = 0.0
                         detection_area = None
 
-                        # Vérification d'écran noir
+                        # Vérification écran noir
                         if is_black_screen(screenshot):
                             current_black_screen_time = current_time
                             last_black_screen_notification = state.get("last_black_screen_notification", 0)
                             
                             if current_black_screen_time - last_black_screen_notification > 60:
-                                black_screen_title = f"⚫ Écran Noir - {source_name}"
-                                black_screen_message = f"Écran noir détecté sur {source_name}. La fenêtre est peut-être fermée ou masquée."
-                                
-                                if notification_queue.add_notification(black_screen_title, black_screen_message, 8):
-                                    state["last_black_screen_notification"] = current_black_screen_time
-                                    log_info(f"📢 Notification écran noir envoyée pour {source_name}")
-                                
-                            state["consecutive_failures"] += 1
-                            state["last_error"] = f"Écran noir détecté"
+                                notification_queue.add_notification(
+                                    f"⚫ Écran Noir - {source_name}",
+                                    f"Écran noir détecté sur {source_name}",
+                                    8
+                                )
+                                state["last_black_screen_notification"] = current_black_screen_time
                             
-                            # Sauvegarder le screenshot même si écran noir (sans détection)
-                            update_webapp_screenshot(source_name, screenshot, False, None, None, 0.0)
+                            state["consecutive_failures"] += 1
+                            state["last_error"] = "Écran noir"
+                            
+                            # Mettre à jour le screenshot
+                            update_webapp_screenshot_with_detection(source_name, screenshot)
                         else:
-                            # Reset des erreurs d'écran noir
-                            last_error = state.get("last_error")
-                            if last_error and "écran noir" in last_error.lower():
+                            # Reset erreurs
+                            if state.get("last_error") and "noir" in state.get("last_error", "").lower():
                                 state["consecutive_failures"] = 0
                                 state["last_error"] = None
 
                             state["successful_captures"] += 1
-                            state["last_error"] = None
 
-                            # Détection d'alertes avec zone de détection
-                            for alert in ALERTS:
-                                if not alert.get('enabled', True):
+                            # DÉTECTION AVEC SYSTÈME UNIFIÉ
+                            for alert_name, alert_config in config_manager.config.get("alerts", {}).items():
+                                if not alert_config.get("enabled", True):
                                     continue
-                                    
+                                
                                 try:
-                                    result = check_for_alert(screenshot, alert, return_confidence=True, return_area=True)
+                                    # Appel à la nouvelle fonction
+                                    result = check_for_alert(screenshot, alert_name, source_name=source_name)
                                     
-                                    if isinstance(result, tuple) and len(result) == 2:
-                                        confidence, area = result
-                                    else:
-                                        confidence = result
-                                        area = None
-                                    
-                                    if confidence > max_confidence:
-                                        max_confidence = confidence
-                                        detection_area = area
+                                    if result:
+                                        confidence = result.get('confidence', 0.0)
                                         
-                                    if confidence >= alert['threshold']:
-                                        alert_detected = True
-                                        current_alert = alert
-                                        state["last_alert_name"] = alert["name"]
-                                        state["total_detections"] += 1
-                                        log_info(f"Alerte détectée dans {source_name}: {alert['name']} (confiance: {confidence:.3f})")
-                                        break
+                                        if confidence > max_confidence:
+                                            alert_detected = True
+                                            current_alert_name = alert_name
+                                            max_confidence = confidence
+                                            detection_area = {
+                                                'x': result.get('x', 0),
+                                                'y': result.get('y', 0),
+                                                'width': result.get('width', 100),
+                                                'height': result.get('height', 100)
+                                            }
+                                        
+                                        # Gestion du cooldown
+                                        last_alert_time = state.get(f"last_{alert_name}_time", 0)
+                                        cooldown = alert_config.get("cooldown", 300)
+                                        
+                                        if current_time - last_alert_time > cooldown:
+                                            # Notification
+                                            title = f"🚨 {alert_name} - {source_name}"
+                                            message = f"Détection: {confidence:.1%}"
+                                            
+                                            notification_queue.add_notification(title, message, priority=5)
+                                            state[f"last_{alert_name}_time"] = current_time
+                                            state["notifications_sent"] += 1
+                                            state["total_detections"] += 1
+                                            
+                                            log_info(f"✅ ALERTE: {alert_name} sur {source_name} ({confidence:.1%})")
+                                
                                 except Exception as e:
-                                    log_error(f"Erreur lors de la vérification de l'alerte {alert.get('name', 'inconnue')}: {e}")
-                                    continue
+                                    log_error(f"Erreur vérification {alert_name}: {e}")
 
                             state["last_confidence"] = max_confidence
-
-                            # Gestion des détections consécutives
-                            if alert_detected:
-                                state["consecutive_detections"] += 1
-                            else:
-                                state["consecutive_detections"] = 0
-
-                            # Logique de notification
-                            should_notify = False
-                            if alert_detected:
-                                time_since_last = current_time - state["last_notification_time"]
-                                cooldown = state["notification_cooldown"]
-                                
-                                if (not state["last_alert_state"]) or \
-                                (time_since_last > cooldown and state["consecutive_detections"] >= 3):
-                                    should_notify = True
-
-                            if should_notify and current_alert:
-                                title = f"{source_name} - {current_alert['name']}"
-                                message = f"{current_alert['name']} (Confiance: {max_confidence:.1%})"
-                                
-                                if notification_queue.add_notification(title, message):
-                                    state["last_notification_time"] = current_time
-                                    state["notifications_sent"] += 1
-                                    log_info(f"Notification envoyée pour {source_name}: {current_alert['name']}")
-                                    
-                                    add_webapp_alert(source_name, current_alert['name'], max_confidence, 
-                                                    screenshot, detection_area)
-                                else:
-                                    log_error(f"Échec envoi notification pour {source_name}")
-
                             state["last_alert_state"] = alert_detected
-                            state["last_capture_time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                            state["last_alert_name"] = current_alert_name
+                            state["last_capture_time"] = time.strftime("%Y-%m-%d %H:%M:%S")
                             
-                            # Sauvegarder le screenshot avec la zone de détection
-                            # CORRECTION: Appel correct de la fonction
-                            from webapp import update_webapp_screenshot_with_detection
-                            update_webapp_screenshot_with_detection(
-                                source_name, 
-                                screenshot, 
-                                detection_area,
-                                current_alert['name'] if current_alert else None,
-                                max_confidence
-                            )
+                            # Mettre à jour le screenshot avec détection
+                            if alert_detected and detection_area:
+                                update_webapp_screenshot_with_detection(
+                                    source_name,
+                                    screenshot,
+                                    detection_area if alert_detected else None,
+                                    current_alert_name if alert_detected else None,
+                                    max_confidence if alert_detected else 0.0
+                                )
+                            else:
+                                update_webapp_screenshot_with_detection(source_name, screenshot)
 
                     except Exception as e:
                         state["error_count"] += 1
@@ -497,33 +492,23 @@ def main():
                 # Mise à jour interface web
                 update_webapp_data(windows_state, global_stats)
                 
-                # Affichage console simplifié avec informations capture directe
+                # Affichage console
                 if global_stats["total_cycles"] % 10 == 0:
-                    cycle_duration = time.time() - cycle_start
-                    active_sources = sum(1 for state in windows_state.values() 
-                                       if state.get('consecutive_failures', 0) < 5)
-                    total_detections = sum(state.get('total_detections', 0) 
-                                         for state in windows_state.values())
-                    
-                    pause_status = " [PAUSE]" if is_system_paused() else ""
-                    capture_mode = " [DIRECT]"  # Indicateur mode direct
-                    
-                    if global_stats["pause_count"] > 0:
-                        pause_info = f" (Pauses: {global_stats['pause_count']}, Temps pause: {global_stats['total_paused_time']:.1f}s)"
-                    else:
-                        pause_info = ""
+                    active_sources = sum(1 for s in windows_state.values() 
+                                       if s.get('consecutive_failures', 0) < 5)
+                    total_detections = sum(s.get('total_detections', 0) 
+                                         for s in windows_state.values())
                     
                     log_info(f"📊 Cycle {global_stats['total_cycles']}: "
-                           f"{active_sources}/{len(windows_state)} sources actives, "
-                           f"{total_detections} détections, "
-                           f"{cycle_duration:.2f}s{capture_mode}{pause_status}{pause_info}")
+                           f"{active_sources}/{len(windows_state)} sources, "
+                           f"{total_detections} détections")
                 
                 # Sauvegarde périodique
                 if current_time - global_stats["last_status_save"] > 300:
                     save_statistics(windows_state, global_stats)
                     global_stats["last_status_save"] = current_time
 
-                # Calcul du temps d'attente dynamique
+                # Attente
                 cycle_duration = time.time() - cycle_start
                 sleep_time = max(0.1, CHECK_INTERVAL - cycle_duration)
                 time.sleep(sleep_time)
@@ -535,112 +520,47 @@ def main():
                 time.sleep(WINDOW_RETRY_INTERVAL)
 
     except KeyboardInterrupt:
-        log_info("Arrêt demandé par l'utilisateur")
+        log_info("Arrêt demandé")
     except Exception as e:
         log_error(f"Erreur critique: {e}")
     finally:
-        # Nettoyage
-        log_info("🛑 Arrêt du système en cours...")
+        log_info("🛑 Arrêt du système...")
         
-        # Calculer le temps total de pause si on est encore en pause
         if pause_start_time is not None:
-            final_pause_duration = time.time() - pause_start_time
-            global_stats["total_paused_time"] += final_pause_duration
+            global_stats["total_paused_time"] += time.time() - pause_start_time
         
         notification_queue.stop()
-        capture_manager.disconnect()  # Remplace obs_manager.disconnect()
+        capture_manager.disconnect()
         stop_webapp()
         save_statistics(windows_state, global_stats)
         
-        # Affichage des statistiques finales avec infos capture directe
-        total_uptime = time.time() - global_stats["start_time"]
-        active_time = total_uptime - global_stats["total_paused_time"]
-        pause_percentage = (global_stats["total_paused_time"] / total_uptime) * 100 if total_uptime > 0 else 0
-        
-        # Statistiques de capture
-        capture_stats = get_capture_statistics()
-        
-        log_info("=== Statistiques finales ===")
-        log_info(f"Mode de capture: {global_stats['capture_mode']}")
-        log_info(f"Temps total: {total_uptime:.1f}s")
-        log_info(f"Temps actif: {active_time:.1f}s")
-        log_info(f"Temps en pause: {global_stats['total_paused_time']:.1f}s ({pause_percentage:.1f}%)")
-        log_info(f"Nombre de pauses: {global_stats['pause_count']}")
-        log_info(f"Reconnexions capture: {global_stats['capture_reconnections']}")
-        log_info(f"Captures réussies: {capture_stats['successful_captures']}/{capture_stats['total_attempts']} ({capture_stats['success_rate']:.1f}%)")
-        if capture_stats.get('direct_capture_stats'):
-            hidden_support = capture_stats['direct_capture_stats'].get('hidden_window_support', False)
-            log_info(f"Support fenêtres cachées: {'✅ Oui' if hidden_support else '❌ Non'}")
         log_info("=== Arrêt du système ===")
-        
         print("\n🎮 Last War Alerts arrêté")
-        print("✅ Mode capture directe - Aucune dépendance OBS")
-        print("Interface web fermée")
         input("Appuyez sur Entrée pour quitter...")
 
 
 def save_statistics(windows_state, global_stats):
-    """Sauvegarde les statistiques dans un fichier JSON"""
+    """Sauvegarde les statistiques"""
     try:
         stats_data = {
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "global_stats": {},
+            "global_stats": global_stats,
             "windows_state": {},
-            "system_paused": is_system_paused(),
-            "capture_mode": "direct_capture"  # NOUVEAU
+            "system_paused": is_system_paused()
         }
         
-        # Nettoyage des stats globales
-        for key, value in global_stats.items():
-            if isinstance(value, (int, float, str, type(None))):
-                stats_data["global_stats"][key] = value
-            else:
-                stats_data["global_stats"][key] = str(value)
-        
-        # Nettoyage des données des fenêtres
         for source, state in windows_state.items():
             clean_state = {}
             for key, value in state.items():
-                if isinstance(value, (int, float, str, type(None))):
+                if isinstance(value, (int, float, str, bool, type(None))):
                     clean_state[key] = value
-                elif isinstance(value, bool):
-                    clean_state[key] = value
-                elif isinstance(value, (list, tuple)):
-                    clean_list = []
-                    for item in value:
-                        if isinstance(item, (int, float, str, bool, type(None))):
-                            clean_list.append(item)
-                        else:
-                            clean_list.append(str(item))
-                    clean_state[key] = clean_list
-                else:
-                    clean_state[key] = str(value)
-            
             stats_data["windows_state"][source] = clean_state
-        
-        # NOUVEAU: Ajouter les statistiques de capture directe
-        try:
-            capture_stats = get_capture_statistics()
-            stats_data["capture_statistics"] = capture_stats
-        except Exception as e:
-            log_debug(f"Erreur ajout stats capture: {e}")
         
         with open("alert_statistics.json", "w", encoding="utf-8") as f:
             json.dump(stats_data, f, indent=2, ensure_ascii=False)
             
-        log_debug("Statistiques sauvegardées")
     except Exception as e:
-        log_error(f"Erreur sauvegarde statistiques: {e}")
-        try:
-            debug_data = {
-                "error": str(e),
-                "global_stats_keys": list(global_stats.keys()) if global_stats else [],
-                "windows_state_keys": list(windows_state.keys()) if windows_state else []
-            }
-            with open("stats_debug.json", "w", encoding="utf-8") as f:
-                json.dump(debug_data, f, indent=2)
-        except:
-            log_error("Impossible de sauvegarder les données de debug")
+        log_error(f"Erreur sauvegarde: {e}")
 
 
 if __name__ == "__main__":

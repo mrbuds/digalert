@@ -1,0 +1,128 @@
+{
+  "version": "2.0",
+  "sources": {},
+  "alerts": {
+    "Dig!": {
+      "enabled": true,
+      "threshold": 0.7,
+      "cooldown": 300,
+      "templates": [
+        {
+          "id": "Dig!_20250923_233222_299591",
+          "path": "/static/alert_templates/Dig!_20250923_233222_299591.png",
+          "threshold": 0.7,
+          "created": "2025-09-23T23:32:22.301540",
+          "source": "import",
+          "size": {
+            "width": 70,
+            "height": 67
+          },
+          "stats": {
+            "detections": 0,
+            "false_positives": 0,
+            "last_used": null,
+            "confidence_history": []
+          }
+        },
+        {
+          "id": "Dig!_20250923_233248_223317",
+          "path": "/static/alert_templates/Dig!_20250923_233248_223317.png",
+          "threshold": 0.7,
+          "created": "2025-09-23T23:32:48.224293",
+          "source": "import",
+          "size": {
+            "width": 68,
+            "height": 58
+          },
+          "stats": {
+            "detections": 1,
+            "false_positives": 0,
+            "last_used": "2025-09-25T20:57:25.954436",
+            "confidence_history": [
+              {
+                "confidence": 0.8819381594657898,
+                "timestamp": "2025-09-25T20:57:25.954436",
+                "false_positive": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "Dig!_20250924_045208_722802",
+          "path": "/static/alert_templates/Dig!_20250924_045208_722802.png",
+          "threshold": 0.7,
+          "created": "2025-09-24T04:52:08.725333",
+          "source": "bluestack",
+          "size": {
+            "width": 50,
+            "height": 43
+          },
+          "stats": {
+            "detections": 1,
+            "false_positives": 0,
+            "last_used": "2025-09-25T20:34:57.217803",
+            "confidence_history": [
+              {
+                "confidence": 0.9954113960266113,
+                "timestamp": "2025-09-25T20:34:57.217803",
+                "false_positive": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "Dig!_20250925_051810_237057",
+          "path": "/static/alert_templates/Dig!_20250925_051810_237057.png",
+          "threshold": 0.7,
+          "created": "2025-09-25T05:18:10.239010",
+          "source": "bluestack",
+          "size": {
+            "width": 45,
+            "height": 39
+          },
+          "stats": {
+            "detections": 0,
+            "false_positives": 0,
+            "last_used": null,
+            "confidence_history": []
+          }
+        }
+      ]
+    },
+    "EGGGGGG!": {
+      "enabled": false,
+      "threshold": 0.7,
+      "cooldown": 300,
+      "templates": [
+        {
+          "id": "EGGGGGG!_20250925_223202_450434",
+          "path": "/static/alert_templates/EGGGGGG!_20250925_223202_450434.png",
+          "threshold": 0.7,
+          "created": "2025-09-25T22:32:02.452435",
+          "source": "import",
+          "size": {
+            "width": 74,
+            "height": 78
+          },
+          "stats": {
+            "detections": 0,
+            "false_positives": 0,
+            "last_used": null,
+            "confidence_history": []
+          }
+        }
+      ]
+    },
+    "TITANIUM!": {
+      "enabled": false,
+      "threshold": 0.7,
+      "cooldown": 300,
+      "templates": []
+    }
+  },
+  "global_settings": {
+    "default_threshold": 0.7,
+    "check_interval": 2.0,
+    "notification_cooldown": 300
+  }
+}

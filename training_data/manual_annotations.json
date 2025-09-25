@@ -1,0 +1,61 @@
+{
+  "annotations": [
+    {
+      "id": "bluestack_Dig!_20250922_220308_569904",
+      "timestamp": "2025-09-22T22:03:08.569904",
+      "source_name": "bluestack",
+      "alert_name": "Dig!",
+      "bbox": {
+        "x": 776,
+        "y": 870,
+        "width": 47,
+        "height": 39
+      },
+      "template_path": "training_data\\extracted_templates\\template_bluestack_Dig!_20250922_220308_569904.png",
+      "confidence": 1.0,
+      "screenshot_shape": [
+        1023,
+        1353
+      ],
+      "validated": true,
+      "is_manual": true
+    },
+    {
+      "id": "bluestack_Dig!_20250922_220355_540923",
+      "timestamp": "2025-09-22T22:03:55.540923",
+      "source_name": "bluestack",
+      "alert_name": "Dig!",
+      "bbox": {
+        "x": 1260,
+        "y": 794,
+        "width": 47,
+        "height": 35
+      },
+      "template_path": "training_data\\extracted_templates\\template_bluestack_Dig!_20250922_220355_540923.png",
+      "confidence": 1.0,
+      "screenshot_shape": [
+        1023,
+        1353
+      ],
+      "validated": true,
+      "is_manual": true
+    }
+  ],
+  "templates": {
+    "Dig!": [
+      {
+        "path": "training_data\\extracted_templates\\template_bluestack_Dig!_20250922_220308_569904.png",
+        "confidence": 1.0,
+        "source": "bluestack",
+        "timestamp": "2025-09-22T22:03:08.569904"
+      },
+      {
+        "path": "training_data\\extracted_templates\\template_bluestack_Dig!_20250922_220355_540923.png",
+        "confidence": 1.0,
+        "source": "bluestack",
+        "timestamp": "2025-09-22T22:03:55.540923"
+      }
+    ]
+  },
+  "training_sessions": []
+}
