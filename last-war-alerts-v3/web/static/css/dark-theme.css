@@ -1,0 +1,35 @@
+/* Thème sombre permanent */
+:root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-card: rgba(40, 40, 50, 0.9);
+    --bg-card-hover: rgba(45, 45, 55, 0.95);
+    --bg-input: rgba(50, 50, 60, 0.9);
+    --text-primary: #ffffff;
+    --text-secondary: #e0e0e0;
+    --text-muted: #9a9a9a;
+    --accent-primary: #667eea;
+    --accent-secondary: #764ba2;
+    --success: #28a745;
+    --warning: #ffc107;
+    --danger: #dc3545;
+    --info: #17a2b8;
+}
+
+body {
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    min-height: 100vh;
+    color: var(--text-secondary);
+}
+
+.dashboard-container {
+    background: rgba(30, 30, 40, 0.95);
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    backdrop-filter: blur(10px);
+    margin: 20px;
+    padding: 30px;
+    color: var(--text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 Last War Alerts - Dashboard</title>
+    
+    <!-- CSS externes -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- CSS personnalisés -->
+    <link href="/static/css/dark-theme.css" rel="stylesheet">
+    <link href="/static/css/main.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Contrôles de pause -->
+    <div id="pause-controls-container"></div>
+
+    <!-- Container principal -->
+    <div class="container-fluid">
+        <div class="dashboard-container">
+            <!-- Header -->
+            <div id="header-container"></div>
+            
+            <!-- Contenu principal -->
+            <div class="row">
+                <!-- Colonne statut des sources -->
+                <div class="col-lg-7">
+                    <div id="sources-status-container"></div>
+                </div>
+                
+                <!-- Colonne historique -->
+                <div class="col-lg-5">
+                    <div id="alerts-history-container"></div>
+                </div>
+            </div>
+            
+            <!-- Panneau de configuration -->
+            <div id="config-panel-container"></div>
+            
+            <!-- Panneau d'entraînement -->
+            <div id="training-panel-container"></div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modals-container"></div>
+
+    <!-- Scripts externes -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Module principal -->
+    <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

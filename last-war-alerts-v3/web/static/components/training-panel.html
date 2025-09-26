@@ -1,0 +1,215 @@
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="training-panel" id="training-panel" style="display: none;">
+            <div class="panel-header">
+                <h4 class="text-white">
+                    <i class="fas fa-graduation-cap"></i> Mode Entraînement
+                </h4>
+                <button id="training-toggle-btn" class="btn btn-primary" onclick="window.toggleTrainingMode()">
+                    <i class="fas fa-pencil-alt"></i> Mode Entraînement
+                </button>
+            </div>
+            
+            <div class="panel-content mt-4">
+                <div class="row">
+                    <!-- Contrôles -->
+                    <div class="col-md-4">
+                        <div class="control-section">
+                            <h5 class="text-white mb-3">Configuration</h5>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Source</label>
+                                <select id="training-source-select" class="form-select alert-select">
+                                    <option value="">-- Sélectionner --</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Alerte</label>
+                                <select id="training-alert-select" class="form-select alert-select">
+                                    <option value="">-- Sélectionner --</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Seuil de détection</label>
+                                <input type="number" id="training-threshold" class="form-control" 
+                                       value="0.7" step="0.05" min="0.3" max="0.95">
+                            </div>
+                            
+                            <button class="btn btn-primary w-100 mb-2" onclick="window.app.training.loadSourceCapture()">
+                                <i class="fas fa-camera"></i> Charger la capture
+                            </button>
+                            
+                            <div class="action-buttons mt-3">
+                                <button class="btn btn-success w-100 mb-2" onclick="window.saveAnnotation()">
+                                    <i class="fas fa-save"></i> Sauvegarder la sélection
+                                </button>
+                                <button class="btn btn-warning w-100" onclick="window.clearAnnotation()">
+                                    <i class="fas fa-undo"></i> Effacer la sélection
+                                </button>
+                            </div>
+                            
+                            <div class="selection-info mt-3">
+                                <div id="selection-info" class="text-muted text-center">
+                                    Aucune sélection
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Zone de dessin -->
+                    <div class="col-md-8">
+                        <div class="canvas-container">
+                            <h5 class="text-white mb-3">Zone d'annotation</h5>
+                            <div id="training-canvas-container">
+                                <!-- Le canvas sera ajouté ici par JavaScript -->
+                            </div>
+                            <div class="canvas-help mt-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle"></i> 
+                                    Cliquez et glissez pour sélectionner une zone à détecter
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Statistiques -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h5 class="text-white mb-3">
+                            <i class="fas fa-chart-bar"></i> Statistiques d'entraînement
+                        </h5>
+                        <div id="training-stats">
+                            <!-- Statistiques générées dynamiquement -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.training-panel {
+    background: rgba(40, 40, 50, 0.9);
+    border-radius: 15px;
+    padding: 25px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.control-section {
+    background: rgba(50, 50, 60, 0.9);
+    padding: 20px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.control-section h5 {
+    color: var(--primary);
+    font-size: 1.1em;
+    margin-bottom: 15px;
+}
+
+.canvas-container {
+    background: rgba(50, 50, 60, 0.9);
+    padding: 20px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    min-height: 400px;
+}
+
+#training-canvas-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 350px;
+    background: rgba(30, 30, 40, 0.5);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+#annotation-canvas {
+    max-width: 100%;
+    height: auto;
+}
+
+.action-buttons {
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.selection-info {
+    padding: 15px;
+    background: rgba(30, 30, 40, 0.5);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+#selection-info {
+    font-size: 0.95em;
+    font-weight: 600;
+}
+
+.canvas-help {
+    padding: 10px;
+    background: rgba(30, 30, 40, 0.3);
+    border-radius: 5px;
+    text-align: center;
+}
+
+/* Statistiques d'entraînement */
+#training-stats .stat-card {
+    background: rgba(60, 60, 70, 0.9);
+    padding: 15px;
+    border-radius: 10px;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.3s ease;
+}
+
+#training-stats .stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+#training-stats .stat-value {
+    font-size: 2em;
+    font-weight: bold;
+    color: var(--primary);
+    margin-bottom: 5px;
+}
+
+#training-stats .stat-label {
+    font-size: 0.9em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Animation de succès */
+@keyframes successPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 20px rgba(40, 167, 69, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+    }
+}
+
+.canvas-container.success {
+    animation: successPulse 1s;
+}
+</style>
