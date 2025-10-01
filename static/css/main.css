@@ -52,6 +52,140 @@
     box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
 }
 
+/* Cartes d'alertes */
+.config-alert-card {
+    background: rgba(50, 50, 60, 0.9);
+    padding: 15px;
+    border-radius: 10px;
+    border-left: 4px solid var(--primary);
+    transition: all 0.3s ease;
+}
+
+.config-alert-card:hover {
+    transform: translateX(5px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.config-alert-card.enabled {
+    border-left-color: var(--success);
+}
+
+.config-alert-card.disabled {
+    opacity: 0.6;
+    border-left-color: var(--danger);
+}
+
+.alert-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* Grille de templates */
+#templates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+    padding: 20px;
+    background: rgba(30, 30, 40, 0.5);
+    border-radius: 10px;
+    min-height: 300px;
+}
+
+.template-card {
+    position: relative;
+    background: rgba(60, 60, 70, 0.9);
+    border-radius: 8px;
+    padding: 10px;
+    transition: all 0.3s ease;
+}
+
+.template-card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.template-card img {
+    width: 100%;
+    height: 100px;
+    object-fit: contain;
+    border-radius: 5px;
+    background: rgba(30, 30, 40, 0.5);
+}
+
+.template-card .template-info {
+    margin-top: 8px;
+    font-size: 0.85em;
+}
+
+.template-card .template-actions {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: flex;
+    gap: 5px;
+}
+
+.template-card.removing {
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+.templates-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 10px;
+    background: rgba(30, 30, 40, 0.3);
+    border-radius: 5px;
+}
+
+.template-mini-item {
+    text-align: center;
+}
+
+.template-mini-item img {
+    width: 100%;
+    height: 60px;
+    object-fit: contain;
+    border-radius: 3px;
+    background: rgba(40, 40, 50, 0.5);
+}
+
+/* Configuration des sources */
+.source-config-item {
+    background: rgba(50, 50, 60, 0.9);
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.source-config-item:hover {
+    background: rgba(55, 55, 65, 0.95);
+    transform: translateX(5px);
+}
+
+.source-config-item .source-name {
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.source-config-item .source-info {
+    flex-grow: 1;
+}
+
+.source-config-item .source-actions {
+    display: flex;
+    gap: 5px;
+}
+
 /* Toast notifications */
 .toast-notification {
     position: fixed;
@@ -93,20 +227,76 @@
     }
 }
 
-.template-card {
-    transition: all 0.3s ease;
-    opacity: 1;
-    transform: scale(1);
-}
-
-.template-card.removing {
-    opacity: 0;
-    transform: scale(0.8);
-}
-
 @keyframes fadeOut {
     to {
         opacity: 0;
         transform: scale(0.8);
     }
+}
+
+/* Boutons personnalisés */
+.btn-group-vertical .btn {
+    margin-bottom: 2px;
+}
+
+.btn-group-vertical .btn:last-child {
+    margin-bottom: 0;
+}
+
+/* Groupes de paramètres */
+.setting-group {
+    background: rgba(50, 50, 60, 0.9);
+    padding: 20px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.setting-group h5 {
+    font-size: 1.1em;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Scrollbar personnalisée */
+.templates-mini-grid::-webkit-scrollbar,
+#templates-grid::-webkit-scrollbar {
+    width: 8px;
+}
+
+.templates-mini-grid::-webkit-scrollbar-track,
+#templates-grid::-webkit-scrollbar-track {
+    background: rgba(30, 30, 40, 0.5);
+    border-radius: 4px;
+}
+
+.templates-mini-grid::-webkit-scrollbar-thumb,
+#templates-grid::-webkit-scrollbar-thumb {
+    background: rgba(100, 100, 120, 0.5);
+    border-radius: 4px;
+}
+
+.templates-mini-grid::-webkit-scrollbar-thumb:hover,
+#templates-grid::-webkit-scrollbar-thumb:hover {
+    background: rgba(120, 120, 140, 0.7);
+}
+
+/* Modales */
+.modal-content {
+    background: rgba(40, 40, 50, 0.98);
+    color: var(--text-secondary);
+}
+
+.modal-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Badges */
+.badge {
+    padding: 0.4em 0.8em;
+    font-size: 0.85em;
 }

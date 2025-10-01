@@ -43,10 +43,36 @@ export class API {
         return this.request('/api/config');
     }
     
-    async addAlert(name, threshold = 0.7) {
+    async saveConfig(config) {
+        return this.request('/api/config/save', {
+            method: 'POST',
+            body: JSON.stringify(config)
+        });
+    }
+    
+    async exportConfig() {
+        return this.request('/api/config/export');
+    }
+    
+    async importConfig(data) {
+        return this.request('/api/config/import', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+    }
+    
+    // Alertes
+    async addAlert(name, threshold = 0.7, cooldown = 300) {
         return this.request('/api/config/alert', {
             method: 'POST',
-            body: JSON.stringify({ name, threshold })
+            body: JSON.stringify({ name, threshold, cooldown })
+        });
+    }
+    
+    async updateAlert(name, data) {
+        return this.request(`/api/config/alert/${name}`, {
+            method: 'PUT',
+            body: JSON.stringify(data)
         });
     }
     
@@ -77,14 +103,41 @@ export class API {
         });
     }
     
-    async updateTemplateThreshold(alertName, templateId, threshold, testWithLast = false, sourceName = null) {
+    async updateTemplateThreshold(alertName, templateId, threshold) {
         return this.request(`/api/config/template/${alertName}/${templateId}/threshold`, {
             method: 'POST',
-            body: JSON.stringify({
-                threshold: threshold,
-                test_with_last: testWithLast,
-                source_name: sourceName
-            })
+            body: JSON.stringify({ threshold })
+        });
+    }
+    
+    // Sources
+    async getSources() {
+        return this.request('/api/config/sources');
+    }
+    
+    async addSource(name, window_title, enabled = true) {
+        return this.request('/api/config/source', {
+            method: 'POST',
+            body: JSON.stringify({ name, window_title, enabled })
+        });
+    }
+    
+    async updateSource(name, data) {
+        return this.request(`/api/config/source/${name}`, {
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+    }
+    
+    async deleteSource(name) {
+        return this.request(`/api/config/source/${name}`, { method: 'DELETE' });
+    }
+    
+    // Paramètres globaux
+    async saveSettings(settings) {
+        return this.request('/api/config/settings', {
+            method: 'POST',
+            body: JSON.stringify(settings)
         });
     }
     
@@ -102,21 +155,5 @@ export class API {
     // Training
     async getTrainingStats() {
         return this.request('/api/training/statistics');
-    }
-    
-    async getAnnotations() {
-        return this.request('/api/training/annotations');
-    }
-    
-    async deleteAnnotation(annotationId) {
-        return this.request(`/api/training/annotation/${annotationId}`, {
-            method: 'DELETE'
-        });
-    }
-    
-    async clearAlertAnnotations(alertName) {
-        return this.request(`/api/training/clear/${alertName}`, {
-            method: 'POST'
-        });
     }
 }

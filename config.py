@@ -418,7 +418,7 @@ SOURCE_WINDOWS = [
     },
     {
         "source_name": "bluestack", 
-        "window_title": "BlueStacks App Player",
+        "window_title": "bluestack",
         "notification_cooldown": 45,
         "priority": 2
     }
