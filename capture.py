@@ -211,13 +211,27 @@ class WindowCapture:
                      f"pywin32 {info.get('pywin32_version')}")
     
     def find_window(self):
-        """Trouve le handle de la fenêtre"""
+        """Trouve le handle de la fenêtre - VERSION AMÉLIORÉE"""
         def enum_callback(hwnd, results):
             try:
-                if win32gui.IsWindowVisible(hwnd):
-                    window_text = win32gui.GetWindowText(hwnd)
-                    if self.window_title.lower() in window_text.lower():
-                        results.append((hwnd, window_text))
+                # Filtrer les fenêtres invisibles et minimisées d'entrée
+                if not win32gui.IsWindowVisible(hwnd):
+                    return True
+                
+                window_text = win32gui.GetWindowText(hwnd)
+                if self.window_title.lower() in window_text.lower():
+                    # Vérifier que la fenêtre a des dimensions valides
+                    try:
+                        rect = win32gui.GetClientRect(hwnd)
+                        width = rect[2] - rect[0]
+                        height = rect[3] - rect[1]
+                        
+                        if width > 0 and height > 0:
+                            results.append((hwnd, window_text, width * height))
+                        else:
+                            log_debug(f"Fenêtre {window_text} ignorée (dimensions nulles)")
+                    except:
+                        pass
             except:
                 pass
             return True
@@ -230,9 +244,12 @@ class WindowCapture:
             return False
         
         if results:
+            # Trier par surface (la plus grande en premier)
+            results.sort(key=lambda x: x[2], reverse=True)
+            
             # Correspondance exacte prioritaire
-            exact_match = next((hwnd for hwnd, title in results 
-                              if title.lower() == self.window_title.lower()), None)
+            exact_match = next((hwnd for hwnd, title, _ in results 
+                            if title.lower() == self.window_title.lower()), None)
             
             if exact_match:
                 self.hwnd = exact_match
@@ -246,9 +263,9 @@ class WindowCapture:
         log_warning(f"Fenêtre introuvable: {self.window_title}")
         self.hwnd = None
         return False
-    
+ 
     def get_window_info(self):
-        """Récupère les informations de la fenêtre"""
+        """Récupère les informations de la fenêtre - VERSION AMÉLIORÉE"""
         if not self.hwnd:
             return None
         
@@ -265,27 +282,50 @@ class WindowCapture:
             except:
                 info['title'] = 'Error'
             
-            # Coordonnées
+            # CORRECTION: Utiliser GetClientRect au lieu de GetWindowRect
             try:
-                rect = win32gui.GetWindowRect(self.hwnd)
-                info.update({
-                    'rect': rect,
-                    'width': rect[2] - rect[0],
-                    'height': rect[3] - rect[1]
-                })
-            except:
-                info.update({'rect': (0, 0, 0, 0), 'width': 0, 'height': 0})
-            
-            # Zone client
-            try:
+                # Essayer d'abord GetClientRect pour les dimensions réelles
                 client_rect = win32gui.GetClientRect(self.hwnd)
+                client_width = client_rect[2] - client_rect[0]
+                client_height = client_rect[3] - client_rect[1]
+                
+                # Si les dimensions client sont valides, les utiliser
+                if client_width > 0 and client_height > 0:
+                    info.update({
+                        'width': client_width,
+                        'height': client_height,
+                        'client_width': client_width,
+                        'client_height': client_height
+                    })
+                else:
+                    # Fallback sur GetWindowRect
+                    rect = win32gui.GetWindowRect(self.hwnd)
+                    info.update({
+                        'width': rect[2] - rect[0],
+                        'height': rect[3] - rect[1]
+                    })
+            except Exception as e:
+                log_debug(f"Erreur dimensions: {e}")
+                # Essayer de forcer des dimensions minimales
                 info.update({
-                    'client_rect': client_rect,
-                    'client_width': client_rect[2] - client_rect[0],
-                    'client_height': client_rect[3] - client_rect[1]
+                    'width': 800,  # Valeur par défaut
+                    'height': 600,
+                    'rect': (0, 0, 800, 600)
                 })
+            
+            # CORRECTION: Améliorer la détection de visibilité
+            try:
+                # Vérifier plusieurs indicateurs de visibilité
+                is_visible = win32gui.IsWindowVisible(self.hwnd)
+                is_iconic = win32gui.IsIconic(self.hwnd)  # Minimisée?
+                
+                # Une fenêtre est considérée "visible" si:
+                # - Elle n'est pas minimisée OU
+                # - Elle a des dimensions valides
+                info['is_visible'] = (is_visible or not is_iconic) and info.get('width', 0) > 0
+                info['is_iconic'] = is_iconic
             except:
-                info.update({'client_rect': (0, 0, 0, 0), 'client_width': 0, 'client_height': 0})
+                info['is_visible'] = True  # Assumer visible par défaut
             
             # État
             window_state = check_window_state(self.hwnd)
@@ -294,12 +334,6 @@ class WindowCapture:
                 'is_maximized': window_state['is_maximized'],
                 'state_detection_method': window_state['method']
             })
-            
-            # Visibilité
-            try:
-                info['is_visible'] = win32gui.IsWindowVisible(self.hwnd)
-            except:
-                info['is_visible'] = True
             
             # Processus
             try:
@@ -330,7 +364,7 @@ class WindowCapture:
                 'width': 0,
                 'height': 0
             }
-    
+
     def _is_window_cloaked(self):
         """Vérifie si la fenêtre est masquée par DWM"""
         if not dwmapi:
@@ -563,15 +597,39 @@ class WindowCapture:
             return None
     
     def capture(self, method=None):
-        """Capture principale avec fallback intelligent"""
+        """Capture principale avec validation du handle - VERSION ROBUSTE"""
         self.capture_stats['total_attempts'] += 1
         
+        # ÉTAPE 1: Valider le handle existant
+        if self.hwnd and not is_window_valid(self.hwnd):
+            log_warning(f"Handle invalide détecté pour {self.window_title}, réinitialisation...")
+            self.hwnd = None
+            self.capture_stats['last_error'] = "Handle invalide (fenêtre fermée?)"
+        
+        # ÉTAPE 2: Chercher la fenêtre si nécessaire
         if not self.hwnd:
             if not self.find_window():
                 self.capture_stats['last_error'] = "Fenêtre introuvable"
+                log_debug(f"Fenêtre {self.window_title} introuvable")
                 return None
+            else:
+                log_info(f"✅ Fenêtre {self.window_title} retrouvée avec nouveau handle")
         
-        # SPÉCIAL LAST WAR: OBS moderne en priorité
+        # ÉTAPE 3: Vérifier les dimensions
+        window_info = self.get_window_info()
+        if window_info:
+            width = window_info.get('width', 0)
+            height = window_info.get('height', 0)
+            
+            if width == 0 or height == 0:
+                log_warning(f"Dimensions invalides ({width}x{height}), recherche de la fenêtre...")
+                self.hwnd = None
+                if not self.find_window():
+                    self.capture_stats['last_error'] = "Impossible de réobtenir le handle"
+                    return None
+                window_info = self.get_window_info()
+        
+        # ÉTAPE 4: SPÉCIAL LAST WAR - OBS moderne en priorité
         if "last war" in self.window_title.lower():
             log_debug("Last War détecté - Méthode OBS moderne")
             img = self.capture_with_obs_modern()
@@ -582,12 +640,12 @@ class WindowCapture:
                 return img
             log_debug("OBS moderne échoué, essai méthodes standard")
         
-        # Ordre de priorité
+        # ÉTAPE 5: Ordre de priorité avec LES BONS NOMS
         methods_order = [
-            CaptureMethod.WIN32_PRINT_WINDOW,
-            CaptureMethod.WIN32_GDI,
-            CaptureMethod.MSS_MONITOR,
-            CaptureMethod.PIL_IMAGEGRAB
+            CaptureMethod.WIN32_PRINT_WINDOW,  # print_window en priorité
+            CaptureMethod.WIN32_GDI,           # win32_gdi
+            CaptureMethod.MSS_MONITOR,         # mss_monitor
+            CaptureMethod.PIL_IMAGEGRAB        # pil_imagegrab
         ]
         
         # Méthode préférée en premier
@@ -902,6 +960,38 @@ def capture_window(ws_dummy, source_name, window_title, timeout_ms=MAX_CAPTURE_T
         save_debug_screenshot(None, source_name, False, error_msg)
         return None
 
+def is_window_valid(hwnd):
+    """Vérifie si un handle de fenêtre est toujours valide"""
+    if not hwnd:
+        return False
+    
+    try:
+        # Vérifier si la fenêtre existe toujours
+        if not win32gui.IsWindow(hwnd):
+            return False
+        
+        # Vérifier si le processus existe toujours
+        try:
+            _, process_id = win32process.GetWindowThreadProcessId(hwnd)
+            if not psutil.pid_exists(process_id):
+                return False
+        except:
+            return False
+        
+        # Vérifier que la fenêtre a un titre (pas vide/détruite)
+        try:
+            title = win32gui.GetWindowText(hwnd)
+            if not title:
+                return False
+        except:
+            return False
+        
+        return True
+        
+    except Exception as e:
+        log_debug(f"Validation handle échouée: {e}")
+        return False
+    
 def enhance_image_quality(image):
     """Améliore la qualité de l'image"""
     if image is None:

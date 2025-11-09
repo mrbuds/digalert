@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 """
 Main.py modifié pour utiliser le système unifié de configuration
 Compatible avec l'interface web et config_manager
@@ -20,13 +21,13 @@ from config import CHECK_INTERVAL, WINDOW_RETRY_INTERVAL, SOURCE_WINDOWS
 from capture import (
     capture_window, initialize_capture_system, is_obs_connected, 
     cleanup_capture_system, get_capture_statistics, get_window_capture_info,
-    optimize_capture_method
+    optimize_capture_method, is_window_valid
 )
 from detection import check_for_alert, cleanup_template_cache_if_needed
 from webapp import (init_webapp, start_webapp, update_webapp_data, 
                    stop_webapp, register_pause_callback, 
                    is_webapp_paused, set_webapp_pause_state)
-from utils import log_error, log_info, log_debug
+from utils import log_error, log_info, log_debug, log_warning
 
 # Variables globales pour la gestion de pause
 SYSTEM_PAUSED = False
@@ -388,9 +389,41 @@ def main():
                             state["last_error"] = "Capture échouée"
                             state["error_count"] += 1
                             
-                            if state["consecutive_failures"] >= 5:
-                                log_error(f"Trop d'échecs pour {source_name}")
-                                time.sleep(WINDOW_RETRY_INTERVAL)
+                            # Afficher plus de détails sur l'erreur
+                            log_warning(f"Échec capture {source_name}")
+                            log_error(f"❌ Échec {source_name}:")
+                            log_error(f"   Fenêtre: {window_title}")
+                            log_error(f"   Échecs consécutifs: {state['consecutive_failures']}")
+                            
+                            # Réinitialisation après 3 échecs (au lieu de 5)
+                            if state["consecutive_failures"] >= 3:
+                                log_error(f"Trop d'échecs pour {source_name}, réinitialisation du handle...")
+                                
+                                # Essayer de forcer la réinitialisation du capturer
+                                try:
+                                    from capture import multi_capture
+                                    if window_title in multi_capture.capturers:
+                                        capturer = multi_capture.capturers[window_title]
+                                        
+                                        # Vérifier si le handle est valide
+                                        if capturer.hwnd and not is_window_valid(capturer.hwnd):
+                                            log_error(f"   ⚠️ Handle invalide détecté!")
+                                        
+                                        old_hwnd = capturer.hwnd
+                                        capturer.hwnd = None  # Forcer la recherche
+                                        
+                                        # Essayer de retrouver la fenêtre
+                                        if capturer.find_window():
+                                            log_info(f"✅ Fenêtre {source_name} retrouvée (handle {old_hwnd} → {capturer.hwnd})")
+                                            state["consecutive_failures"] = 0
+                                            state["error_count"] = 0
+                                            state["last_error"] = None
+                                        else:
+                                            log_warning(f"❌ Impossible de retrouver la fenêtre {source_name}")
+
+                                except Exception as e:
+                                    log_error(f"Erreur réinitialisation: {e}")
+                            time.sleep(WINDOW_RETRY_INTERVAL)
                             continue
 
                         # Variables de détection
@@ -472,6 +505,12 @@ def main():
                             state["last_alert_name"] = current_alert_name
                             state["last_capture_time"] = time.strftime("%Y-%m-%d %H:%M:%S")
                             
+                            # Réinitialiser les échecs après succès
+                            if state["consecutive_failures"] > 0:
+                                log_debug(f"Réinitialisation échecs pour {source_name}")
+                                state["consecutive_failures"] = 0
+                                state["last_error"] = None
+
                             # Mettre à jour le screenshot avec détection
                             if alert_detected and detection_area:
                                 update_webapp_screenshot_with_detection(

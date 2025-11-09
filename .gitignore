@@ -1,7 +1,7 @@
 *.png
 !alert_templates/*.png
 *.log
-*.1
+*.log.*
 alert_statistics.json
 __pycache__
 .DS_Store
