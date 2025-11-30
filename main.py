@@ -389,40 +389,84 @@ def main():
                             state["last_error"] = "Capture échouée"
                             state["error_count"] += 1
                             
-                            # Afficher plus de détails sur l'erreur
+                            # DIAGNOSTIC DÉTAILLÉ
                             log_warning(f"Échec capture {source_name}")
                             log_error(f"❌ Échec {source_name}:")
                             log_error(f"   Fenêtre: {window_title}")
                             log_error(f"   Échecs consécutifs: {state['consecutive_failures']}")
                             
-                            # Réinitialisation après 3 échecs (au lieu de 5)
-                            if state["consecutive_failures"] >= 3:
-                                log_error(f"Trop d'échecs pour {source_name}, réinitialisation du handle...")
-                                
-                                # Essayer de forcer la réinitialisation du capturer
+                            # Obtenir infos détaillées
+                            try:
+                                from capture import multi_capture
+                                if window_title in multi_capture.capturers:
+                                    capturer = multi_capture.capturers[window_title]
+                                    window_info = capturer.get_window_info()
+                                    
+                                    if window_info:
+                                        log_error(f"   Visible: {window_info.get('is_visible')}")
+                                        log_error(f"   Minimisée: {window_info.get('is_minimized')}")
+                                        log_error(f"   Taille: {window_info.get('width')}x{window_info.get('height')}")
+                                        log_error(f"   Handle: {capturer.hwnd}")
+                                        log_error(f"   Dernière méthode réussie: {capturer.last_successful_method}")
+                                        
+                                        # Vérifier les stats de chaque méthode
+                                        method_stats = capturer.capture_stats.get('method_stats', {})
+                                        log_error(f"   Stats méthodes:")
+                                        for method, stats in method_stats.items():
+                                            if stats.get('attempts', 0) > 0:
+                                                success_rate = (stats['successes'] / stats['attempts']) * 100
+                                                log_error(f"      {method}: {success_rate:.0f}% ({stats['successes']}/{stats['attempts']})")
+                            except Exception as e:
+                                log_error(f"   Erreur diagnostic: {e}")
+                            
+                            # Réinitialisation progressive
+                            if state["consecutive_failures"] == 3:
+                                log_error(f"   🔄 Tentative 1: Réinitialisation méthode + handle...")
                                 try:
                                     from capture import multi_capture
                                     if window_title in multi_capture.capturers:
                                         capturer = multi_capture.capturers[window_title]
-                                        
-                                        # Vérifier si le handle est valide
-                                        if capturer.hwnd and not is_window_valid(capturer.hwnd):
-                                            log_error(f"   ⚠️ Handle invalide détecté!")
-                                        
                                         old_hwnd = capturer.hwnd
-                                        capturer.hwnd = None  # Forcer la recherche
                                         
-                                        # Essayer de retrouver la fenêtre
+                                        # FORCER rotation méthodes
+                                        capturer.last_successful_method = None
+                                        log_info(f"   🔄 Réinitialisation méthode de capture")
+                                        
+                                        # Réinitialiser handle
+                                        capturer.hwnd = None
+                                        
                                         if capturer.find_window():
-                                            log_info(f"✅ Fenêtre {source_name} retrouvée (handle {old_hwnd} → {capturer.hwnd})")
+                                            log_info(f"   ✅ Handle: {old_hwnd} → {capturer.hwnd}")
                                             state["consecutive_failures"] = 0
-                                            state["error_count"] = 0
-                                            state["last_error"] = None
                                         else:
-                                            log_warning(f"❌ Impossible de retrouver la fenêtre {source_name}")
-
+                                            log_warning(f"   ❌ Fenêtre introuvable")
                                 except Exception as e:
-                                    log_error(f"Erreur réinitialisation: {e}")
+                                    log_error(f"   Erreur: {e}")
+                            
+                            elif state["consecutive_failures"] == 6:
+                                log_error(f"   🔄 Tentative 2: Recréation complète du capturer...")
+                                try:
+                                    from capture import recreate_capturer
+                                    if recreate_capturer(window_title):
+                                        log_info(f"   ✅ Capturer recréé")
+                                        state["consecutive_failures"] = 0
+                                    else:
+                                        log_warning(f"   ❌ Échec recréation")
+                                except Exception as e:
+                                    log_error(f"   Erreur recréation: {e}")
+                            
+                            elif state["consecutive_failures"] >= 10:
+                                log_error(f"   ⏸️ Tentative 3: Pause de 15 secondes...")
+                                time.sleep(15)
+                                state["consecutive_failures"] = 0
+                                
+                                try:
+                                    from capture import recreate_capturer
+                                    recreate_capturer(window_title)
+                                    log_info(f"   🔄 Capturer recréé après pause")
+                                except Exception as e:
+                                    log_error(f"   Erreur: {e}")
+                            
                             time.sleep(WINDOW_RETRY_INTERVAL)
                             continue
 

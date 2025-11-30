@@ -35,508 +35,508 @@
             "height": 58
           },
           "stats": {
-            "detections": 13477,
+            "detections": 23330,
             "false_positives": 0,
-            "last_used": "2025-11-09T02:46:28.263623",
+            "last_used": "2025-11-26T09:46:19.495667",
             "confidence_history": [
               {
-                "confidence": 0.9264312982559204,
-                "timestamp": "2025-11-04T07:43:32.565624",
+                "confidence": 0.925669252872467,
+                "timestamp": "2025-11-26T02:52:38.585753",
                 "false_positive": false
               },
               {
-                "confidence": 0.8870987296104431,
-                "timestamp": "2025-11-04T07:43:34.573667",
+                "confidence": 0.9612743854522705,
+                "timestamp": "2025-11-26T02:52:40.394148",
                 "false_positive": false
               },
               {
-                "confidence": 0.926456868648529,
-                "timestamp": "2025-11-04T07:43:36.595724",
+                "confidence": 0.8111664652824402,
+                "timestamp": "2025-11-26T02:52:42.527150",
                 "false_positive": false
               },
               {
-                "confidence": 0.9264482855796814,
-                "timestamp": "2025-11-04T07:43:38.574413",
+                "confidence": 0.9114274978637695,
+                "timestamp": "2025-11-26T02:52:44.573986",
                 "false_positive": false
               },
               {
-                "confidence": 0.926467776298523,
-                "timestamp": "2025-11-04T07:43:40.577469",
+                "confidence": 0.9114623665809631,
+                "timestamp": "2025-11-26T02:52:46.522396",
                 "false_positive": false
               },
               {
-                "confidence": 0.9680455923080444,
-                "timestamp": "2025-11-04T10:24:38.068219",
+                "confidence": 0.970730721950531,
+                "timestamp": "2025-11-26T02:52:48.388928",
                 "false_positive": false
               },
               {
-                "confidence": 0.9665035009384155,
-                "timestamp": "2025-11-04T10:24:40.033932",
+                "confidence": 0.967487096786499,
+                "timestamp": "2025-11-26T02:52:50.416862",
                 "false_positive": false
               },
               {
-                "confidence": 0.9670357704162598,
-                "timestamp": "2025-11-04T10:24:42.033102",
+                "confidence": 0.9354519844055176,
+                "timestamp": "2025-11-26T02:52:52.506816",
                 "false_positive": false
               },
               {
-                "confidence": 0.967368483543396,
-                "timestamp": "2025-11-04T10:24:44.040929",
+                "confidence": 0.9109421968460083,
+                "timestamp": "2025-11-26T02:52:54.554741",
                 "false_positive": false
               },
               {
-                "confidence": 0.9667758345603943,
-                "timestamp": "2025-11-04T10:24:46.111174",
+                "confidence": 0.969793438911438,
+                "timestamp": "2025-11-26T02:52:56.387510",
                 "false_positive": false
               },
               {
-                "confidence": 0.9191450476646423,
-                "timestamp": "2025-11-04T10:24:48.201026",
+                "confidence": 0.9385213255882263,
+                "timestamp": "2025-11-26T02:52:58.551908",
                 "false_positive": false
               },
               {
-                "confidence": 0.9664199948310852,
-                "timestamp": "2025-11-04T10:24:50.044871",
+                "confidence": 0.966801643371582,
+                "timestamp": "2025-11-26T02:53:00.469938",
                 "false_positive": false
               },
               {
-                "confidence": 0.966866135597229,
-                "timestamp": "2025-11-04T10:24:52.055825",
+                "confidence": 0.8023957014083862,
+                "timestamp": "2025-11-26T02:53:02.533750",
                 "false_positive": false
               },
               {
-                "confidence": 0.9669700860977173,
-                "timestamp": "2025-11-04T10:24:54.054895",
+                "confidence": 0.9668793082237244,
+                "timestamp": "2025-11-26T02:53:04.415762",
                 "false_positive": false
               },
               {
-                "confidence": 0.9669972062110901,
-                "timestamp": "2025-11-04T10:24:56.068933",
+                "confidence": 0.9607832431793213,
+                "timestamp": "2025-11-26T02:53:06.401971",
                 "false_positive": false
               },
               {
-                "confidence": 0.9708096385002136,
-                "timestamp": "2025-11-04T10:24:58.039134",
+                "confidence": 0.9546358585357666,
+                "timestamp": "2025-11-26T02:53:08.363691",
                 "false_positive": false
               },
               {
-                "confidence": 0.9665528535842896,
-                "timestamp": "2025-11-04T10:25:00.055594",
+                "confidence": 0.9516938924789429,
+                "timestamp": "2025-11-26T02:53:10.393746",
                 "false_positive": false
               },
               {
-                "confidence": 0.9670268893241882,
-                "timestamp": "2025-11-04T10:25:02.090216",
+                "confidence": 0.9518769979476929,
+                "timestamp": "2025-11-26T02:53:12.368705",
                 "false_positive": false
               },
               {
-                "confidence": 0.9674034118652344,
-                "timestamp": "2025-11-04T10:25:03.955893",
+                "confidence": 0.9657483696937561,
+                "timestamp": "2025-11-26T02:53:14.369840",
                 "false_positive": false
               },
               {
-                "confidence": 0.9669415354728699,
-                "timestamp": "2025-11-04T10:25:05.953992",
+                "confidence": 0.9709592461585999,
+                "timestamp": "2025-11-26T02:53:16.425527",
                 "false_positive": false
               },
               {
-                "confidence": 0.9662365317344666,
-                "timestamp": "2025-11-04T10:25:07.978733",
+                "confidence": 0.9523104429244995,
+                "timestamp": "2025-11-26T02:53:18.376586",
                 "false_positive": false
               },
               {
-                "confidence": 0.9663895964622498,
-                "timestamp": "2025-11-04T10:25:09.946944",
+                "confidence": 0.9687456488609314,
+                "timestamp": "2025-11-26T02:53:20.472478",
                 "false_positive": false
               },
               {
-                "confidence": 0.9668852090835571,
-                "timestamp": "2025-11-04T10:25:12.003652",
+                "confidence": 0.9660759568214417,
+                "timestamp": "2025-11-26T02:53:22.494192",
                 "false_positive": false
               },
               {
-                "confidence": 0.9669718742370605,
-                "timestamp": "2025-11-04T10:25:13.955864",
+                "confidence": 0.9702871441841125,
+                "timestamp": "2025-11-26T02:53:24.385587",
                 "false_positive": false
               },
               {
-                "confidence": 0.9669925570487976,
-                "timestamp": "2025-11-04T10:25:15.952481",
+                "confidence": 0.9707399606704712,
+                "timestamp": "2025-11-26T02:53:26.408494",
                 "false_positive": false
               },
               {
-                "confidence": 0.9670836329460144,
-                "timestamp": "2025-11-04T10:25:17.957569",
+                "confidence": 0.9267261028289795,
+                "timestamp": "2025-11-26T02:53:28.598813",
                 "false_positive": false
               },
               {
-                "confidence": 0.9664825201034546,
-                "timestamp": "2025-11-04T10:25:19.953690",
+                "confidence": 0.9704065918922424,
+                "timestamp": "2025-11-26T02:53:30.403437",
                 "false_positive": false
               },
               {
-                "confidence": 0.967036247253418,
-                "timestamp": "2025-11-04T10:25:22.008546",
+                "confidence": 0.9241542220115662,
+                "timestamp": "2025-11-26T02:53:32.442268",
                 "false_positive": false
               },
               {
-                "confidence": 0.9472509026527405,
-                "timestamp": "2025-11-04T10:25:24.121672",
+                "confidence": 0.9680203795433044,
+                "timestamp": "2025-11-26T02:53:34.257054",
                 "false_positive": false
               },
               {
-                "confidence": 0.9668229222297668,
-                "timestamp": "2025-11-04T10:25:25.988526",
+                "confidence": 0.9705970883369446,
+                "timestamp": "2025-11-26T02:53:36.317214",
                 "false_positive": false
               },
               {
-                "confidence": 0.9662365317344666,
-                "timestamp": "2025-11-04T10:25:27.975273",
+                "confidence": 0.9688466787338257,
+                "timestamp": "2025-11-26T02:53:38.266531",
                 "false_positive": false
               },
               {
-                "confidence": 0.9664206504821777,
-                "timestamp": "2025-11-04T10:25:30.053425",
+                "confidence": 0.9549204111099243,
+                "timestamp": "2025-11-26T02:53:40.296522",
                 "false_positive": false
               },
               {
-                "confidence": 0.9668784141540527,
-                "timestamp": "2025-11-04T10:25:31.973636",
+                "confidence": 0.9695892333984375,
+                "timestamp": "2025-11-26T02:53:42.317436",
                 "false_positive": false
               },
               {
-                "confidence": 0.9243927001953125,
-                "timestamp": "2025-11-04T10:25:34.167416",
+                "confidence": 0.9705749750137329,
+                "timestamp": "2025-11-26T02:53:44.306620",
                 "false_positive": false
               },
               {
-                "confidence": 0.9669970870018005,
-                "timestamp": "2025-11-04T10:25:36.016457",
+                "confidence": 0.9709267020225525,
+                "timestamp": "2025-11-26T02:53:46.316235",
                 "false_positive": false
               },
               {
-                "confidence": 0.967025637626648,
-                "timestamp": "2025-11-04T10:25:38.032566",
+                "confidence": 0.9683607220649719,
+                "timestamp": "2025-11-26T02:53:48.328604",
                 "false_positive": false
               },
               {
-                "confidence": 0.9664897322654724,
-                "timestamp": "2025-11-04T10:25:40.002554",
+                "confidence": 0.970801830291748,
+                "timestamp": "2025-11-26T02:53:50.302260",
                 "false_positive": false
               },
               {
-                "confidence": 0.9670330882072449,
-                "timestamp": "2025-11-04T10:25:42.003389",
+                "confidence": 0.8894205689430237,
+                "timestamp": "2025-11-26T03:00:42.890148",
                 "false_positive": false
               },
               {
-                "confidence": 0.9079347848892212,
-                "timestamp": "2025-11-04T10:25:44.185125",
+                "confidence": 0.9628486633300781,
+                "timestamp": "2025-11-26T03:00:44.706582",
                 "false_positive": false
               },
               {
-                "confidence": 0.9668265581130981,
-                "timestamp": "2025-11-04T10:25:46.060557",
+                "confidence": 0.8921334147453308,
+                "timestamp": "2025-11-26T03:00:46.978751",
                 "false_positive": false
               },
               {
-                "confidence": 0.9662599563598633,
-                "timestamp": "2025-11-04T10:25:48.065259",
+                "confidence": 0.9498647451400757,
+                "timestamp": "2025-11-26T03:02:30.204344",
                 "false_positive": false
               },
               {
-                "confidence": 0.9664274454116821,
-                "timestamp": "2025-11-04T10:25:50.067611",
+                "confidence": 0.9483837485313416,
+                "timestamp": "2025-11-26T03:02:32.204646",
                 "false_positive": false
               },
               {
-                "confidence": 0.9668750762939453,
-                "timestamp": "2025-11-04T10:25:52.070144",
+                "confidence": 0.9479377269744873,
+                "timestamp": "2025-11-26T03:02:34.220635",
                 "false_positive": false
               },
               {
-                "confidence": 0.9742659330368042,
-                "timestamp": "2025-11-04T10:25:54.125042",
+                "confidence": 0.9098438620567322,
+                "timestamp": "2025-11-26T03:02:36.168583",
                 "false_positive": false
               },
               {
-                "confidence": 0.8529040813446045,
-                "timestamp": "2025-11-04T20:53:02.503805",
+                "confidence": 0.9464019536972046,
+                "timestamp": "2025-11-26T03:02:38.233471",
                 "false_positive": false
               },
               {
-                "confidence": 0.8489784002304077,
-                "timestamp": "2025-11-04T20:53:04.486101",
+                "confidence": 0.9436002373695374,
+                "timestamp": "2025-11-26T03:02:40.230409",
                 "false_positive": false
               },
               {
-                "confidence": 0.8785840272903442,
-                "timestamp": "2025-11-04T20:53:06.491763",
+                "confidence": 0.9503337144851685,
+                "timestamp": "2025-11-26T03:02:42.014561",
                 "false_positive": false
               },
               {
-                "confidence": 0.9745595455169678,
-                "timestamp": "2025-11-04T22:17:31.581008",
+                "confidence": 0.950238049030304,
+                "timestamp": "2025-11-26T03:02:44.032436",
                 "false_positive": false
               },
               {
-                "confidence": 0.8293436765670776,
-                "timestamp": "2025-11-04T22:17:33.722114",
+                "confidence": 0.9502552151679993,
+                "timestamp": "2025-11-26T03:02:46.013666",
                 "false_positive": false
               },
               {
-                "confidence": 0.84776371717453,
-                "timestamp": "2025-11-05T03:02:21.898693",
+                "confidence": 0.9494905471801758,
+                "timestamp": "2025-11-26T03:02:48.208672",
                 "false_positive": false
               },
               {
-                "confidence": 0.8479529023170471,
-                "timestamp": "2025-11-05T03:02:24.053493",
+                "confidence": 0.9599021077156067,
+                "timestamp": "2025-11-26T03:04:40.080310",
                 "false_positive": false
               },
               {
-                "confidence": 0.7898024320602417,
-                "timestamp": "2025-11-05T03:10:02.881977",
+                "confidence": 0.9004756212234497,
+                "timestamp": "2025-11-26T03:04:42.294909",
                 "false_positive": false
               },
               {
-                "confidence": 0.9128866195678711,
-                "timestamp": "2025-11-05T03:11:32.345540",
+                "confidence": 0.9600919485092163,
+                "timestamp": "2025-11-26T03:04:44.078546",
                 "false_positive": false
               },
               {
-                "confidence": 0.9320703148841858,
-                "timestamp": "2025-11-05T03:13:02.350786",
+                "confidence": 0.960014283657074,
+                "timestamp": "2025-11-26T03:04:46.088972",
                 "false_positive": false
               },
               {
-                "confidence": 0.8469843864440918,
-                "timestamp": "2025-11-05T03:13:31.137935",
+                "confidence": 0.956995964050293,
+                "timestamp": "2025-11-26T03:07:40.897229",
                 "false_positive": false
               },
               {
-                "confidence": 0.8532395362854004,
-                "timestamp": "2025-11-05T03:20:31.504570",
+                "confidence": 0.9678261280059814,
+                "timestamp": "2025-11-26T08:32:45.874186",
                 "false_positive": false
               },
               {
-                "confidence": 0.9375297427177429,
-                "timestamp": "2025-11-05T05:02:21.354423",
+                "confidence": 0.9678062200546265,
+                "timestamp": "2025-11-26T08:32:47.849494",
                 "false_positive": false
               },
               {
-                "confidence": 0.9647871851921082,
-                "timestamp": "2025-11-05T05:02:23.229382",
+                "confidence": 0.9569441676139832,
+                "timestamp": "2025-11-26T08:32:49.868257",
                 "false_positive": false
               },
               {
-                "confidence": 0.9598389267921448,
-                "timestamp": "2025-11-05T05:08:23.692843",
+                "confidence": 0.9688823223114014,
+                "timestamp": "2025-11-26T08:36:01.909186",
                 "false_positive": false
               },
               {
-                "confidence": 0.9595340490341187,
-                "timestamp": "2025-11-05T05:08:25.715257",
+                "confidence": 0.9705380201339722,
+                "timestamp": "2025-11-26T08:47:04.351924",
                 "false_positive": false
               },
               {
-                "confidence": 0.9592901468276978,
-                "timestamp": "2025-11-05T05:16:06.451163",
+                "confidence": 0.9705380201339722,
+                "timestamp": "2025-11-26T08:47:06.316243",
                 "false_positive": false
               },
               {
-                "confidence": 0.9591601490974426,
-                "timestamp": "2025-11-05T05:16:08.471976",
+                "confidence": 0.9706533551216125,
+                "timestamp": "2025-11-26T08:47:08.345859",
                 "false_positive": false
               },
               {
-                "confidence": 0.9657605290412903,
-                "timestamp": "2025-11-05T05:24:28.058419",
+                "confidence": 0.7933449149131775,
+                "timestamp": "2025-11-26T08:47:10.452131",
                 "false_positive": false
               },
               {
-                "confidence": 0.9647220969200134,
-                "timestamp": "2025-11-05T05:24:30.066502",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T08:59:46.531800",
                 "false_positive": false
               },
               {
-                "confidence": 0.9616783857345581,
-                "timestamp": "2025-11-05T05:24:36.060286",
+                "confidence": 0.9638265371322632,
+                "timestamp": "2025-11-26T08:59:48.582391",
                 "false_positive": false
               },
               {
-                "confidence": 0.9628232717514038,
-                "timestamp": "2025-11-05T05:24:38.068489",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T08:59:50.652318",
                 "false_positive": false
               },
               {
-                "confidence": 0.9583934545516968,
-                "timestamp": "2025-11-05T06:11:55.541225",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T08:59:52.608408",
                 "false_positive": false
               },
               {
-                "confidence": 0.9360681176185608,
-                "timestamp": "2025-11-05T10:17:04.920256",
+                "confidence": 0.9666997790336609,
+                "timestamp": "2025-11-26T08:59:54.601680",
                 "false_positive": false
               },
               {
-                "confidence": 0.9369203448295593,
-                "timestamp": "2025-11-05T10:17:06.962267",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T08:59:56.600263",
                 "false_positive": false
               },
               {
-                "confidence": 0.871467649936676,
-                "timestamp": "2025-11-05T10:17:08.973416",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T08:59:58.593580",
                 "false_positive": false
               },
               {
-                "confidence": 0.9373492002487183,
-                "timestamp": "2025-11-05T10:17:10.929298",
+                "confidence": 0.9666997790336609,
+                "timestamp": "2025-11-26T09:00:00.634267",
                 "false_positive": false
               },
               {
-                "confidence": 0.9158912301063538,
-                "timestamp": "2025-11-05T10:17:12.930941",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:02.683286",
                 "false_positive": false
               },
               {
-                "confidence": 0.9377073049545288,
-                "timestamp": "2025-11-05T10:17:14.933409",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:04.610265",
                 "false_positive": false
               },
               {
-                "confidence": 0.90976482629776,
-                "timestamp": "2025-11-05T10:17:16.946380",
+                "confidence": 0.9666997790336609,
+                "timestamp": "2025-11-26T09:00:06.627407",
                 "false_positive": false
               },
               {
-                "confidence": 0.8810675740242004,
-                "timestamp": "2025-11-05T10:17:18.994415",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:08.616001",
                 "false_positive": false
               },
               {
-                "confidence": 0.8832864165306091,
-                "timestamp": "2025-11-05T10:17:20.955029",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:10.618214",
                 "false_positive": false
               },
               {
-                "confidence": 0.8826329708099365,
-                "timestamp": "2025-11-09T02:44:36.102255",
+                "confidence": 0.9666986465454102,
+                "timestamp": "2025-11-26T09:00:12.606070",
                 "false_positive": false
               },
               {
-                "confidence": 0.8829700946807861,
-                "timestamp": "2025-11-09T02:44:38.083918",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:14.618486",
                 "false_positive": false
               },
               {
-                "confidence": 0.8831104636192322,
-                "timestamp": "2025-11-09T02:44:40.124496",
+                "confidence": 0.9666997790336609,
+                "timestamp": "2025-11-26T09:00:16.651310",
                 "false_positive": false
               },
               {
-                "confidence": 0.8828245401382446,
-                "timestamp": "2025-11-09T02:44:42.114187",
+                "confidence": 0.966667115688324,
+                "timestamp": "2025-11-26T09:00:18.611485",
                 "false_positive": false
               },
               {
-                "confidence": 0.8830597996711731,
-                "timestamp": "2025-11-09T02:44:44.064964",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:20.622052",
                 "false_positive": false
               },
               {
-                "confidence": 0.8698171377182007,
-                "timestamp": "2025-11-09T02:44:46.100258",
+                "confidence": 0.9666991829872131,
+                "timestamp": "2025-11-26T09:00:22.603193",
                 "false_positive": false
               },
               {
-                "confidence": 0.882887601852417,
-                "timestamp": "2025-11-09T02:44:48.034806",
+                "confidence": 0.9666532278060913,
+                "timestamp": "2025-11-26T09:00:24.577161",
                 "false_positive": false
               },
               {
-                "confidence": 0.8828727602958679,
-                "timestamp": "2025-11-09T02:44:50.027465",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:26.604165",
                 "false_positive": false
               },
               {
-                "confidence": 0.8829821944236755,
-                "timestamp": "2025-11-09T02:44:52.077179",
+                "confidence": 0.9666997790336609,
+                "timestamp": "2025-11-26T09:00:28.553272",
                 "false_positive": false
               },
               {
-                "confidence": 0.883056104183197,
-                "timestamp": "2025-11-09T02:44:54.065420",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:30.653200",
                 "false_positive": false
               },
               {
-                "confidence": 0.8085071444511414,
-                "timestamp": "2025-11-09T02:44:56.083043",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:32.604791",
                 "false_positive": false
               },
               {
-                "confidence": 0.817404568195343,
-                "timestamp": "2025-11-09T02:44:58.154120",
+                "confidence": 0.9666997790336609,
+                "timestamp": "2025-11-26T09:00:34.627245",
                 "false_positive": false
               },
               {
-                "confidence": 0.8831700086593628,
-                "timestamp": "2025-11-09T02:45:00.429015",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:36.617304",
                 "false_positive": false
               },
               {
-                "confidence": 0.8834438323974609,
-                "timestamp": "2025-11-09T02:45:02.107978",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:38.582040",
                 "false_positive": false
               },
               {
-                "confidence": 0.8832544088363647,
-                "timestamp": "2025-11-09T02:45:04.113910",
+                "confidence": 0.9666997790336609,
+                "timestamp": "2025-11-26T09:00:40.592004",
                 "false_positive": false
               },
               {
-                "confidence": 0.8556181788444519,
-                "timestamp": "2025-11-09T02:45:06.188210",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:42.624081",
                 "false_positive": false
               },
               {
-                "confidence": 0.8826825618743896,
-                "timestamp": "2025-11-09T02:45:08.204890",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:44.587273",
                 "false_positive": false
               },
               {
-                "confidence": 0.8822079300880432,
-                "timestamp": "2025-11-09T02:45:10.219859",
+                "confidence": 0.9666997790336609,
+                "timestamp": "2025-11-26T09:00:46.609174",
                 "false_positive": false
               },
               {
-                "confidence": 0.8827672600746155,
-                "timestamp": "2025-11-09T02:45:12.203764",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:48.658815",
                 "false_positive": false
               },
               {
-                "confidence": 0.8711066842079163,
-                "timestamp": "2025-11-09T02:46:20.360367",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:50.625631",
                 "false_positive": false
               },
               {
-                "confidence": 0.8681001663208008,
-                "timestamp": "2025-11-09T02:46:22.286370",
+                "confidence": 0.9666991829872131,
+                "timestamp": "2025-11-26T09:00:52.618106",
                 "false_positive": false
               },
               {
-                "confidence": 0.8637892603874207,
-                "timestamp": "2025-11-09T02:46:24.217074",
+                "confidence": 0.9665209650993347,
+                "timestamp": "2025-11-26T09:00:54.616866",
                 "false_positive": false
               },
               {
-                "confidence": 0.8698223233222961,
-                "timestamp": "2025-11-09T02:46:26.252258",
+                "confidence": 0.9668400883674622,
+                "timestamp": "2025-11-26T09:00:56.630818",
                 "false_positive": false
               },
               {
-                "confidence": 0.8703905344009399,
-                "timestamp": "2025-11-09T02:46:28.263623",
+                "confidence": 0.9610472917556763,
+                "timestamp": "2025-11-26T09:46:19.495667",
                 "false_positive": false
               }
             ]
@@ -1071,15 +1071,10 @@
             "height": 39
           },
           "stats": {
-            "detections": 1059,
+            "detections": 1060,
             "false_positives": 0,
-            "last_used": "2025-10-18T23:28:09.715988",
+            "last_used": "2025-11-26T08:48:37.613328",
             "confidence_history": [
-              {
-                "confidence": 0.8862926363945007,
-                "timestamp": "2025-10-17T06:02:14.900255",
-                "false_positive": false
-              },
               {
                 "confidence": 0.8920096755027771,
                 "timestamp": "2025-10-17T06:04:31.012978",
@@ -1574,6 +1569,11 @@
                 "confidence": 0.8947071433067322,
                 "timestamp": "2025-10-18T23:28:09.715988",
                 "false_positive": false
+              },
+              {
+                "confidence": 0.7252731323242188,
+                "timestamp": "2025-11-26T08:48:37.613328",
+                "false_positive": false
               }
             ]
           }
@@ -1626,210 +1626,10 @@
             "height": 59
           },
           "stats": {
-            "detections": 50566,
+            "detections": 50606,
             "false_positives": 0,
-            "last_used": "2025-11-09T02:44:59.629285",
+            "last_used": "2025-11-24T14:58:46.693246",
             "confidence_history": [
-              {
-                "confidence": 0.9337363243103027,
-                "timestamp": "2025-11-04T09:54:38.749089",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.8329928517341614,
-                "timestamp": "2025-11-04T09:54:40.762748",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9311681985855103,
-                "timestamp": "2025-11-04T09:54:42.755593",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.8879026174545288,
-                "timestamp": "2025-11-04T09:54:44.754968",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9332935810089111,
-                "timestamp": "2025-11-04T09:54:46.783636",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.8528777956962585,
-                "timestamp": "2025-11-04T09:54:48.765747",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9097716212272644,
-                "timestamp": "2025-11-04T09:54:50.759129",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9312608242034912,
-                "timestamp": "2025-11-04T09:54:52.722034",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9343844056129456,
-                "timestamp": "2025-11-04T09:54:54.724773",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.8298930525779724,
-                "timestamp": "2025-11-04T09:54:56.739754",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9267446398735046,
-                "timestamp": "2025-11-04T09:54:58.764811",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.8584073781967163,
-                "timestamp": "2025-11-04T09:55:00.785666",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9312528371810913,
-                "timestamp": "2025-11-04T09:55:02.759040",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9181004166603088,
-                "timestamp": "2025-11-04T09:55:04.748737",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9154182076454163,
-                "timestamp": "2025-11-04T09:55:06.751896",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.8870154619216919,
-                "timestamp": "2025-11-04T09:55:08.753657",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9145495891571045,
-                "timestamp": "2025-11-04T09:55:10.759957",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.931358277797699,
-                "timestamp": "2025-11-04T09:55:12.752686",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9309868216514587,
-                "timestamp": "2025-11-04T09:55:14.801773",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.876307487487793,
-                "timestamp": "2025-11-04T09:55:16.762339",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9187825322151184,
-                "timestamp": "2025-11-04T09:55:18.766503",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.8964812755584717,
-                "timestamp": "2025-11-04T09:55:20.767755",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9313428997993469,
-                "timestamp": "2025-11-04T09:55:22.766560",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.8493606448173523,
-                "timestamp": "2025-11-04T09:55:24.770615",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9245571494102478,
-                "timestamp": "2025-11-04T09:55:26.773826",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9334873557090759,
-                "timestamp": "2025-11-04T09:55:28.771750",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9313467144966125,
-                "timestamp": "2025-11-04T09:55:30.778234",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9313044548034668,
-                "timestamp": "2025-11-04T09:55:32.796372",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9188011288642883,
-                "timestamp": "2025-11-04T09:55:34.762179",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9251687526702881,
-                "timestamp": "2025-11-04T09:55:36.787602",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.8417932391166687,
-                "timestamp": "2025-11-04T09:55:38.782915",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9137107729911804,
-                "timestamp": "2025-11-04T09:55:40.778391",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.931326150894165,
-                "timestamp": "2025-11-04T09:55:42.774061",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.885531485080719,
-                "timestamp": "2025-11-04T09:55:44.781245",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9149722456932068,
-                "timestamp": "2025-11-04T09:55:46.775317",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.908610463142395,
-                "timestamp": "2025-11-04T09:55:48.782377",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9311768412590027,
-                "timestamp": "2025-11-04T09:55:50.782228",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9313129186630249,
-                "timestamp": "2025-11-04T09:55:52.783855",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9168350696563721,
-                "timestamp": "2025-11-04T09:55:54.785122",
-                "false_positive": false
-              },
-              {
-                "confidence": 0.9267870783805847,
-                "timestamp": "2025-11-04T09:55:56.784237",
-                "false_positive": false
-              },
               {
                 "confidence": 0.8532470464706421,
                 "timestamp": "2025-11-04T09:55:58.796071",
@@ -2128,6 +1928,206 @@
               {
                 "confidence": 0.9325605630874634,
                 "timestamp": "2025-11-09T02:44:59.629285",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.9235022664070129,
+                "timestamp": "2025-11-09T11:13:38.625435",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.922918438911438,
+                "timestamp": "2025-11-09T11:13:40.648136",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8387753963470459,
+                "timestamp": "2025-11-10T13:52:43.888924",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8504756689071655,
+                "timestamp": "2025-11-10T18:57:44.472337",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8792933821678162,
+                "timestamp": "2025-11-10T18:57:46.476253",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8653048276901245,
+                "timestamp": "2025-11-10T20:15:25.019098",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.868046224117279,
+                "timestamp": "2025-11-10T20:15:27.095854",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8556298613548279,
+                "timestamp": "2025-11-10T20:15:29.013741",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8465868234634399,
+                "timestamp": "2025-11-10T20:15:31.091614",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8596694469451904,
+                "timestamp": "2025-11-10T20:17:17.153581",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8632118105888367,
+                "timestamp": "2025-11-10T20:17:19.062842",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8615971803665161,
+                "timestamp": "2025-11-10T20:17:21.056844",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8627805709838867,
+                "timestamp": "2025-11-10T20:17:23.071701",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.81345534324646,
+                "timestamp": "2025-11-10T20:17:25.082778",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8448814153671265,
+                "timestamp": "2025-11-10T20:17:27.117557",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8627365827560425,
+                "timestamp": "2025-11-10T20:17:29.162255",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8765751123428345,
+                "timestamp": "2025-11-10T20:18:43.160730",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8658354878425598,
+                "timestamp": "2025-11-10T20:18:45.147970",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8010574579238892,
+                "timestamp": "2025-11-14T12:34:43.993569",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8007345795631409,
+                "timestamp": "2025-11-14T12:34:45.956606",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8950470089912415,
+                "timestamp": "2025-11-14T22:09:37.127870",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8760930895805359,
+                "timestamp": "2025-11-14T22:10:23.153073",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8892530202865601,
+                "timestamp": "2025-11-16T03:22:26.968093",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.9402989149093628,
+                "timestamp": "2025-11-16T03:23:02.920638",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8948736786842346,
+                "timestamp": "2025-11-16T03:23:04.911696",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8818346261978149,
+                "timestamp": "2025-11-16T03:25:06.837174",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.932909369468689,
+                "timestamp": "2025-11-16T04:22:32.666208",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8473485708236694,
+                "timestamp": "2025-11-19T15:08:17.775426",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8671664595603943,
+                "timestamp": "2025-11-19T15:11:43.887468",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8476927280426025,
+                "timestamp": "2025-11-19T15:11:45.896250",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8424962162971497,
+                "timestamp": "2025-11-19T15:15:33.960030",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8293217420578003,
+                "timestamp": "2025-11-19T15:15:35.957077",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8094595670700073,
+                "timestamp": "2025-11-23T02:42:18.095199",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8676109910011292,
+                "timestamp": "2025-11-23T02:42:29.800399",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8636383414268494,
+                "timestamp": "2025-11-23T02:42:37.694699",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8690922856330872,
+                "timestamp": "2025-11-23T02:43:08.202137",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.8684102892875671,
+                "timestamp": "2025-11-23T02:43:12.255096",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.9424536824226379,
+                "timestamp": "2025-11-24T14:58:42.699471",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.9209805130958557,
+                "timestamp": "2025-11-24T14:58:44.692401",
+                "false_positive": false
+              },
+              {
+                "confidence": 0.9434323310852051,
+                "timestamp": "2025-11-24T14:58:46.693246",
                 "false_positive": false
               }
             ]

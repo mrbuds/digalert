@@ -214,7 +214,7 @@ class WindowCapture:
         """Trouve le handle de la fenêtre - VERSION AMÉLIORÉE"""
         def enum_callback(hwnd, results):
             try:
-                # Filtrer les fenêtres invisibles et minimisées d'entrée
+                # Filtrer les fenêtres invisibles d'entrée
                 if not win32gui.IsWindowVisible(hwnd):
                     return True
                 
@@ -227,7 +227,20 @@ class WindowCapture:
                         height = rect[3] - rect[1]
                         
                         if width > 0 and height > 0:
-                            results.append((hwnd, window_text, width * height))
+                            # Vérifier aussi que ce n'est pas une fenêtre minimisée
+                            try:
+                                placement = win32gui.GetWindowPlacement(hwnd)
+                                if placement and len(placement) >= 2:
+                                    show_cmd = placement[1]
+                                    is_minimized = (show_cmd == 2 or show_cmd == 6)
+                                    
+                                    # Accepter même si minimisée (PrintWindow peut capturer)
+                                    # mais noter l'état
+                                    results.append((hwnd, window_text, width * height, is_minimized))
+                                else:
+                                    results.append((hwnd, window_text, width * height, False))
+                            except:
+                                results.append((hwnd, window_text, width * height, False))
                         else:
                             log_debug(f"Fenêtre {window_text} ignorée (dimensions nulles)")
                     except:
@@ -245,25 +258,66 @@ class WindowCapture:
         
         if results:
             # Trier par surface (la plus grande en premier)
-            results.sort(key=lambda x: x[2], reverse=True)
+            # Puis par état (non minimisée en priorité)
+            results.sort(key=lambda x: (not x[3], x[2]), reverse=True)
             
             # Correspondance exacte prioritaire
-            exact_match = next((hwnd for hwnd, title, _ in results 
+            exact_match = next((hwnd for hwnd, title, _, _ in results 
                             if title.lower() == self.window_title.lower()), None)
             
             if exact_match:
+                old_hwnd = self.hwnd
                 self.hwnd = exact_match
-                log_debug(f"Fenêtre trouvée (exacte): {self.window_title}")
+                if old_hwnd and old_hwnd != exact_match:
+                    log_info(f"✅ Fenêtre trouvée (exacte): {self.window_title} - Handle changé: {old_hwnd} → {exact_match}")
+                else:
+                    log_debug(f"Fenêtre trouvée (exacte): {self.window_title}")
             else:
+                old_hwnd = self.hwnd
                 self.hwnd = results[0][0]
-                log_debug(f"Fenêtre trouvée (partielle): {results[0][1]}")
+                if old_hwnd and old_hwnd != self.hwnd:
+                    log_info(f"✅ Fenêtre trouvée (partielle): {results[0][1]} - Handle changé: {old_hwnd} → {self.hwnd}")
+                else:
+                    log_debug(f"Fenêtre trouvée (partielle): {results[0][1]}")
             
             return True
         
         log_warning(f"Fenêtre introuvable: {self.window_title}")
         self.hwnd = None
         return False
- 
+
+    def recreate_capturer(window_title):
+        """Recrée complètement un capturer"""
+        try:
+            # Supprimer l'ancien
+            if window_title in multi_capture.capturers:
+                old_capturer = multi_capture.capturers[window_title]
+                old_capturer.cleanup() if hasattr(old_capturer, 'cleanup') else None
+                del multi_capture.capturers[window_title]
+                log_debug(f"Ancien capturer supprimé pour {window_title}")
+            
+            # Déterminer la méthode optimale
+            if "last war" in window_title.lower():
+                preferred_method = CaptureMethod.OBS_MODERN_PRINTWINDOW
+            else:
+                preferred_method = CaptureMethod.WIN32_PRINT_WINDOW
+            
+            # Créer le nouveau
+            new_capturer = WindowCapture(window_title, preferred_method)
+            multi_capture.capturers[window_title] = new_capturer
+            
+            # Tester immédiatement
+            if new_capturer.find_window():
+                log_info(f"✅ Nouveau capturer créé pour {window_title}")
+                return True
+            else:
+                log_warning(f"⚠️ Capturer créé mais fenêtre non trouvée: {window_title}")
+                return False
+                
+        except Exception as e:
+            log_error(f"Erreur recréation capturer: {e}")
+            return False
+
     def get_window_info(self):
         """Récupère les informations de la fenêtre - VERSION AMÉLIORÉE"""
         if not self.hwnd:
@@ -439,6 +493,7 @@ class WindowCapture:
         
         try:
             if not self.hwnd:
+                log_debug("PrintWindow: Handle invalide")
                 raise Exception("Handle invalide")
             
             rect = win32gui.GetWindowRect(self.hwnd)
@@ -446,8 +501,10 @@ class WindowCapture:
             height = rect[3] - rect[1]
             
             if width <= 0 or height <= 0:
+                log_debug(f"PrintWindow: Dimensions invalides {width}x{height}")
                 raise Exception(f"Dimensions invalides: {width}x{height}")
             
+            log_debug(f"PrintWindow: Création contexte DC pour {width}x{height}")
             hwndDC = win32gui.GetWindowDC(self.hwnd)
             mfcDC = win32ui.CreateDCFromHandle(hwndDC)
             saveDC = mfcDC.CreateCompatibleDC()
@@ -455,14 +512,17 @@ class WindowCapture:
             saveBitMap.CreateCompatibleBitmap(mfcDC, width, height)
             saveDC.SelectObject(saveBitMap)
             
+            log_debug("PrintWindow: Appel PrintWindow")
             result = user32.PrintWindow(self.hwnd, saveDC.GetSafeHdc(), 0)
             
             if result:
+                log_debug("PrintWindow: Extraction bitmap")
                 bmpstr = saveBitMap.GetBitmapBits(True)
                 img = np.frombuffer(bmpstr, dtype='uint8')
                 img.shape = (height, width, 4)
                 img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
                 
+                # Nettoyage
                 win32gui.DeleteObject(saveBitMap.GetHandle())
                 saveDC.DeleteDC()
                 mfcDC.DeleteDC()
@@ -470,17 +530,26 @@ class WindowCapture:
                 
                 duration_ms = (time.time() - start_time) * 1000
                 self._update_method_stats(method, True, duration_ms)
-                log_debug(f"PrintWindow: {width}x{height} en {duration_ms:.1f}ms")
+                log_debug(f"PrintWindow: SUCCESS {width}x{height} en {duration_ms:.1f}ms")
                 return img
             else:
-                raise Exception("PrintWindow échoué")
+                log_warning(f"PrintWindow: result=0 (échec PrintWindow API)")
+                # Nettoyage même en cas d'échec
+                try:
+                    win32gui.DeleteObject(saveBitMap.GetHandle())
+                    saveDC.DeleteDC()
+                    mfcDC.DeleteDC()
+                    win32gui.ReleaseDC(self.hwnd, hwndDC)
+                except:
+                    pass
+                raise Exception("PrintWindow retourné 0")
                 
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
             self._update_method_stats(method, False, duration_ms)
             log_debug(f"PrintWindow échoué: {e}")
             return None
-    
+        
     def capture_with_gdi(self):
         """GDI BitBlt classique"""
         start_time = time.time()
@@ -597,7 +666,7 @@ class WindowCapture:
             return None
     
     def capture(self, method=None):
-        """Capture principale avec validation du handle - VERSION ROBUSTE"""
+        """Capture principale avec validation du handle - VERSION OPTIMISÉE"""
         self.capture_stats['total_attempts'] += 1
         
         # ÉTAPE 1: Valider le handle existant
@@ -629,62 +698,120 @@ class WindowCapture:
                     return None
                 window_info = self.get_window_info()
         
-        # ÉTAPE 4: SPÉCIAL LAST WAR - OBS moderne en priorité
-        if "last war" in self.window_title.lower():
-            log_debug("Last War détecté - Méthode OBS moderne")
+        # ÉTAPE 4: Si on a une méthode qui marche, l'utiliser DIRECTEMENT (early return)
+        if self.last_successful_method and self.last_successful_method != CaptureMethod.OBS_MODERN_PRINTWINDOW:
+            log_debug(f"🎯 Utilisation méthode qui marche: {self.last_successful_method}")
+            
+            try:
+                img = self._try_capture_method(self.last_successful_method)
+                
+                if img is not None:
+                    self.capture_stats['successful_captures'] += 1
+                    self.capture_stats['last_error'] = None
+                    return img
+                else:
+                    # La méthode qui marchait a échoué, on va essayer les autres
+                    log_warning(f"⚠️ La méthode habituelle a échoué, rotation vers autres méthodes")
+                    self.last_successful_method = None
+            except Exception as e:
+                log_warning(f"⚠️ Erreur avec méthode habituelle: {e}, rotation")
+                self.last_successful_method = None
+        
+        # ÉTAPE 5: SPÉCIAL LAST WAR - OBS moderne (seulement si pas de méthode qui marche déjà)
+        if "last war" in self.window_title.lower() and not self.last_successful_method:
+            log_debug("🎮 Last War - Test OBS moderne (première fois)")
             img = self.capture_with_obs_modern()
             if img is not None:
                 self.capture_stats['successful_captures'] += 1
                 self.last_successful_method = CaptureMethod.OBS_MODERN_PRINTWINDOW
                 self.capture_stats['last_error'] = None
+                log_info(f"✅ OBS moderne réussie: {img.shape}")
                 return img
-            log_debug("OBS moderne échoué, essai méthodes standard")
+            log_debug("OBS moderne échouée, essai méthodes standard")
         
-        # ÉTAPE 5: Ordre de priorité avec LES BONS NOMS
+        # ÉTAPE 6: Essayer toutes les méthodes dans l'ordre
         methods_order = [
-            CaptureMethod.WIN32_PRINT_WINDOW,  # print_window en priorité
-            CaptureMethod.WIN32_GDI,           # win32_gdi
-            CaptureMethod.MSS_MONITOR,         # mss_monitor
-            CaptureMethod.PIL_IMAGEGRAB        # pil_imagegrab
+            CaptureMethod.WIN32_PRINT_WINDOW,
+            CaptureMethod.WIN32_GDI,
+            CaptureMethod.MSS_MONITOR,
+            CaptureMethod.PIL_IMAGEGRAB
         ]
         
-        # Méthode préférée en premier
-        if method and method in methods_order:
-            methods_order.remove(method)
-            methods_order.insert(0, method)
-        elif self.last_successful_method and self.last_successful_method in methods_order:
-            methods_order.remove(self.last_successful_method)
-            methods_order.insert(0, self.last_successful_method)
-        
         # Essayer chaque méthode
-        for capture_method in methods_order:
+        for i, capture_method in enumerate(methods_order):
             try:
-                img = None
+                method_name = capture_method.split('.')[-1] if '.' in capture_method else capture_method
+                log_debug(f"Tentative {i+1}/{len(methods_order)}: {method_name}")
                 
-                if capture_method == CaptureMethod.WIN32_PRINT_WINDOW:
-                    img = self.capture_with_print_window()
-                elif capture_method == CaptureMethod.WIN32_GDI:
-                    img = self.capture_with_gdi()
-                elif capture_method == CaptureMethod.MSS_MONITOR:
-                    img = self.capture_with_mss()
-                elif capture_method == CaptureMethod.PIL_IMAGEGRAB:
-                    img = self.capture_with_pil()
+                img = self._try_capture_method(capture_method)
                 
                 if img is not None:
                     self.capture_stats['successful_captures'] += 1
                     self.last_successful_method = capture_method
                     self.capture_stats['last_error'] = None
-                    log_debug(f"Capture réussie: {capture_method}")
+                    log_info(f"✅ Capture réussie avec {method_name}: {img.shape}")
                     return img
+                else:
+                    log_debug(f"❌ {method_name} a retourné None")
                     
             except Exception as e:
-                log_debug(f"Méthode {capture_method} échouée: {e}")
+                log_debug(f"❌ Méthode {capture_method} exception: {e}")
                 continue
         
         # Échec complet
         self.capture_stats['last_error'] = "Toutes les méthodes ont échoué"
-        log_warning(f"Échec capture {self.window_title}")
+        log_error(f"💥 ÉCHEC TOTAL pour {self.window_title}")
+        
+        # Forcer reset pour rotation complète au prochain essai
+        self.last_successful_method = None
+        
         return None
+
+    def _try_capture_method(self, capture_method):
+        """Essaie une méthode de capture spécifique"""
+        if capture_method == CaptureMethod.WIN32_PRINT_WINDOW:
+            return self.capture_with_print_window()
+        elif capture_method == CaptureMethod.WIN32_GDI:
+            return self.capture_with_gdi()
+        elif capture_method == CaptureMethod.MSS_MONITOR:
+            return self.capture_with_mss()
+        elif capture_method == CaptureMethod.PIL_IMAGEGRAB:
+            return self.capture_with_pil()
+        elif capture_method == CaptureMethod.OBS_MODERN_PRINTWINDOW:
+            return self.capture_with_obs_modern()
+        return None
+
+    def cleanup(self):
+        """Nettoie les ressources Windows internes"""
+        try:
+            log_debug(f"Nettoyage ressources pour {self.window_title}")
+            
+            # Forcer le garbage collector Python
+            import gc
+            gc.collect()
+            
+            # Réinitialiser toutes les stats
+            self.hwnd = None
+            self.last_successful_method = None
+            
+            # Vider le cache des templates si nécessaire
+            self.capture_stats['method_stats'] = {}
+            for method in [CaptureMethod.WIN32_GDI, CaptureMethod.WIN32_PRINT_WINDOW, 
+                        CaptureMethod.MSS_MONITOR, CaptureMethod.PIL_IMAGEGRAB,
+                        CaptureMethod.OBS_MODERN_PRINTWINDOW]:
+                self.capture_stats['method_stats'][method] = {
+                    'attempts': 0,
+                    'successes': 0,
+                    'avg_time_ms': 0,
+                    'total_time_ms': 0
+                }
+            
+            log_debug(f"Nettoyage terminé pour {self.window_title}")
+            return True
+            
+        except Exception as e:
+            log_error(f"Erreur nettoyage: {e}")
+            return False
     
     def _update_method_stats(self, method, success, duration_ms):
         """Met à jour les statistiques"""

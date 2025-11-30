@@ -32,8 +32,12 @@ SOURCE_WINDOWS = [
 # Intervalles de temps (en secondes)
 CHECK_INTERVAL = 2
 COOLDOWN_PERIOD = 30
-WINDOW_RETRY_INTERVAL = 5
 OBS_RECONNECT_INTERVAL = 10
+
+# Paramètres de performance
+MAX_CAPTURE_TIME_MS = 5000
+MAX_CONSECUTIVE_FAILURES = 10  # Laisser plus de tentatives
+WINDOW_RETRY_INTERVAL = 3  # Attendre 3 secondes entre les tentatives
 
 # Paramètres de détection
 HISTORY_LEN = 20  # Augmenté pour de meilleures statistiques
@@ -134,7 +138,7 @@ OBS_WS_PASSWORD = ""
 OBS_CONNECTION_TIMEOUT = 10
 
 # Configuration des logs
-LOG_LEVEL = "INFO"  # DEBUG, INFO, WARN, ERROR
+LOG_LEVEL = "DEBUG"  # DEBUG, INFO, WARN, ERROR
 LOG_TO_FILE = True
 LOG_FILE = "last_war_alerts.log"
 LOG_MAX_SIZE_MB = 10
